@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+/* 1. Global Custom Theme Settings for Antiquity and Zen Elegance (Artistic Flair Theme) */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Microsoft YaHei", "PingFang SC";
+  --font-serif: "Playfair Display", "Georgia", "Noto Serif SC", "STSong", "Songti SC", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* Artistic Flair Custom Palette */
+  --color-art-teal-dark: #142121;
+  --color-art-teal-light: #1f3a3a;
+  --color-art-gold: #d4af37;
+  --color-art-red-deep: #660000;
+  --color-art-red-mid: #7b0000;
+  --color-art-red-crimson: #8b0000;
+  --color-art-paper: #f5f2ed;
+}
+
+@layer utilities {
+  /* Scrollbar Aesthetics */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(20, 33, 33, 0.6);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(212, 175, 55, 0.25);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(212, 175, 55, 0.5);
+  }
+
+  /* Artistic Flair Vintage Paper style tag class */
+  .paper-tag-theme {
+    background-color: var(--color-art-paper);
+    color: #2c2c2c;
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 2px 2px 7px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* 2. Custom Keyframe Animations for Chinese Ink Canvas & Puppet sway */
+@keyframes sway {
+  0% {
+    transform: rotate(-1.5deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+  100% {
+    transform: rotate(-1.5deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+/* 3. Animation Helpers */
+.animate-spin-slow {
+  animation: spin 8s linear infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-marquee {
+  animation: marquee 1.8s ease-in-out infinite;
+}

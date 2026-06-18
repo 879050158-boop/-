@@ -1,0 +1,6 @@
+{
+  "name": "古风标签交互与视频反推提示词生成器",
+  "description": "古朴暗青宣纸风交互设置界面，支持花朵悬挂标签的物理晃动、散落与重聚动画，提供自定义按钮和快捷指令操作，以及通过 Gemini 服务器端反推生成专业的视频画面详细提示词。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
