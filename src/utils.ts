@@ -783,3 +783,119 @@ export function playTearOrShatter() {
     osc.stop(now + 0.4);
   });
 }
+
+const GUQIN_HARMONICS = [
+  329.63, 392.00, 440.00, // E4, G4, A4
+  523.25, 587.33, 659.25, 783.99, 880.00, // C5, D5, E5, G5, A5
+  1046.50, 1174.66, 1318.51, 1567.98, 1760.00, // C6, D6, E6, G6, A6
+  2093.00, 2349.32 // C7, D7
+];
+
+/**
+ * Procedural synthesizer for exquisite Chinese Guqin harmonics (古琴泛音).
+ * Plays clean, celestial resonant tones with warm wooden body decay.
+ * If mouse speed (velocity) is high, plays a rapid cascade (fragment);
+ * if slow, plays a single pure and delicate sound.
+ */
+export function playGuqinOvertone(velocity: number = 0.5) {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  // Let's decide how many notes to play based on velocity
+  // velocity < 0.6: 1 node (single light touch representation)
+  // velocity >= 0.6 and < 1.8: 2 notes (staggered dyad)
+  // velocity >= 1.8: 3 or 4 notes cascading quickly (glorious roll/cascade fragment!)
+  let notesToPlay = 1;
+  let interNoteDelay = 0.07; // seconds
+
+  if (velocity >= 1.9) {
+    notesToPlay = 3 + Math.floor(Math.random() * 2); // 3 or 4 notes
+    interNoteDelay = 0.05 + Math.random() * 0.04;
+  } else if (velocity >= 0.7) {
+    notesToPlay = 2;
+    interNoteDelay = 0.07 + Math.random() * 0.05;
+  }
+
+  // We choose a random pentatonic starting position for this cascade fragment
+  const startIdx = Math.floor(Math.random() * (GUQIN_HARMONICS.length - notesToPlay - 1));
+  
+  // Decide whether the cascade goes up or down
+  const isAscending = Math.random() > 0.4;
+
+  for (let i = 0; i < notesToPlay; i++) {
+    const noteDelay = i * interNoteDelay;
+    const noteTime = now + noteDelay;
+
+    // Select pentatonic frequency
+    const idx = isAscending ? (startIdx + i) : (startIdx + notesToPlay - 1 - i);
+    const freq = GUQIN_HARMONICS[Math.max(0, Math.min(GUQIN_HARMONICS.length - 1, idx))];
+
+    // Play a single pristine Guqin overtone at scheduled noteTime
+    playSingleOvertoneNode(ctx, freq, noteTime, velocity);
+  }
+}
+
+function playSingleOvertoneNode(ctx: AudioContext, freq: number, playTime: number, speed: number) {
+  // 1. Core Sine Oscillator (Pure overtone tone)
+  const osc1 = ctx.createOscillator();
+  // 2. Secondary Sine Oscillator (Adding organic depth at octave harmonic)
+  const osc2 = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+  const bpFilter = ctx.createBiquadFilter();
+
+  osc1.type = "sine";
+  osc1.frequency.setValueAtTime(freq, playTime);
+  // Delicate mechanical slide/vibrato: overtones hold flat (unlike stopped strings) but have tiny detune warmth
+  osc1.detune.setValueAtTime((Math.random() - 0.5) * 8, playTime);
+
+  osc2.type = "sine";
+  osc2.frequency.setValueAtTime(freq * 2, playTime);
+  osc2.detune.setValueAtTime((Math.random() - 0.5) * 12, playTime);
+
+  // Filter to soften attack and contain metallic glaze
+  bpFilter.type = "bandpass";
+  bpFilter.frequency.setValueAtTime(freq * 1.5, playTime);
+  bpFilter.Q.setValueAtTime(3.0, playTime);
+
+  // Volume scale: moderate speed should be extremely clear and medium volume.
+  // We limit the volume to prevent digital clipping/harshness, keeping it elegant.
+  const maxGain = Math.min(0.065, 0.02 + speed * 0.015);
+
+  // Attack-decay envelope envelope for crystalline Guqin overtone
+  gainNode.gain.setValueAtTime(0, playTime);
+  // Extremely quick attack but round (not clicking)
+  gainNode.gain.linearRampToValueAtTime(maxGain, playTime + 0.008);
+  // Moderate ring decrescendo
+  gainNode.gain.exponentialRampToValueAtTime(maxGain * 0.3, playTime + 0.12);
+  // Sweet lingering ring tail
+  const decayTime = 1.2 + Math.random() * 1.4;
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, playTime + decayTime);
+
+  // Soft high-passed click mimicking a nail pluck (木质弹拨质感)
+  const pluckOsc = ctx.createOscillator();
+  const pluckGain = ctx.createGain();
+  pluckOsc.type = "triangle";
+  pluckOsc.frequency.setValueAtTime(freq * 2.8, playTime);
+  pluckOsc.frequency.exponentialRampToValueAtTime(80, playTime + 0.04);
+  
+  pluckGain.gain.setValueAtTime(0, playTime);
+  pluckGain.gain.linearRampToValueAtTime(maxGain * 0.45, playTime + 0.002);
+  pluckGain.gain.exponentialRampToValueAtTime(0.0001, playTime + 0.038);
+
+  // Audio routing
+  osc1.connect(gainNode);
+  osc2.connect(gainNode);
+  pluckOsc.connect(pluckGain);
+
+  gainNode.connect(ctx.destination);
+  pluckGain.connect(ctx.destination);
+
+  osc1.start(playTime);
+  osc2.start(playTime);
+  pluckOsc.start(playTime);
+
+  osc1.stop(playTime + decayTime + 0.1);
+  osc2.stop(playTime + decayTime + 0.1);
+  pluckOsc.stop(playTime + 0.05);
+}

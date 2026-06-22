@@ -3,6 +3,8 @@ import { TagItem } from "./types";
 import TagStage from "./components/TagStage";
 import HelpManual from "./components/HelpManual";
 import IntroPoster from "./components/IntroPoster";
+import KunlunStage from "./components/KunlunStage";
+import InkSplashOverlay from "./components/InkSplashOverlay";
 import { BookOpen, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -45,7 +47,8 @@ const INITIAL_TAGS: string[] = [
 ];
 
 export default function App() {
-  const [showIntro, setShowIntro] = useState(true);
+  const [stage, setStage] = useState<"intro" | "tagstage" | "kunlun">("intro");
+  const [isInkSpattering, setIsInkSpattering] = useState(false);
 
   // Convert list to stateful Tag objects
   const [tags, setTags] = useState<TagItem[]>(
@@ -115,64 +118,34 @@ export default function App() {
   };
 
   return (
-    <AnimatePresence mode="wait">
-      {showIntro ? (
-        <motion.div
-          key="intro-poster"
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 0.985, y: -5 }}
-          transition={{ duration: 0.45, ease: "easeInOut" }}
-          className="w-full min-h-screen"
-        >
-          <IntroPoster onEnter={() => setShowIntro(false)} />
-        </motion.div>
-      ) : (
-        <motion.div
-          key="main-app"
-          initial={{ opacity: 0, scale: 1.015 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          id="app-root"
-          className="min-h-screen w-full bg-[#142121] text-[#e0d8cc] flex flex-col antialiased selection:bg-[#d4af37]/30 selection:text-[#f5f2ed]"
-          style={{ backgroundImage: "radial-gradient(circle at 50% 50%, #1f3a3a 0%, #142121 100%)" }}
-        >
-          {/* Dynamic top elegant navigation branding bar */}
-          <header className="relative z-20 flex items-center justify-between px-6 py-4 bg-[#0f1b1b]/95 border-b border-[#d4af37]/30 backdrop-blur-md shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-tr from-[#d4af37] to-[#f9e79f] shadow-md shadow-black/40">
-                <Sparkles className="h-4.5 w-4.5 text-[#142121] animate-pulse" />
-                <div className="absolute inset-0 rounded-xl border border-[#d4af37]/30 animate-ping opacity-25" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold tracking-widest text-[#d4af37] font-serif">
-                    昆仑谣·了不起的她们
-                  </span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#8b0000]/60 border border-[#8b0000]/40 text-[#f5f2ed]">
-                    Artistic Flair Live
-                  </span>
-                </div>
-                <h1 className="text-[11px] text-stone-400 tracking-wider mt-0.5 font-sans">
-                  打破偏见  撕掉标签·破执与重聚
-                </h1>
-              </div>
-            </div>
-
-            {/* Action Button Set */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowHelp(true)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1a2b2b] border border-[#d4af37]/20 text-[#e0d8cc] hover:text-[#f5f2ed] hover:border-[#d4af37]/50 hover:bg-[#1f3a3a] transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <BookOpen className="h-3.5 w-3.5 text-[#d4af37]" />
-                <span>设计及意向说明</span>
-              </button>
-            </div>
-          </header>
-
-          {/* Main interactive container layout taking full height and width */}
-          <main className="flex-1 w-full max-w-[1600px] mx-auto p-4 md:p-6 flex flex-col justify-stretch">
-            <div className="flex-1 w-full flex flex-col">
+    <>
+      <AnimatePresence mode="wait">
+        {stage === "intro" ? (
+          <motion.div
+            key="intro-poster"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 0.985, y: -5 }}
+            transition={{ duration: 0.45, ease: "easeInOut" }}
+            className="w-full min-h-screen"
+          >
+            <IntroPoster onEnter={() => setStage("tagstage")} />
+          </motion.div>
+        ) : stage === "tagstage" ? (
+          <motion.div
+            key="main-app"
+            initial={{ opacity: 0, scale: 1.015 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95, filter: "blur(15px)", y: 15 }}
+            transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
+            id="app-root"
+            className="min-h-screen w-full text-[#e0d8cc] flex flex-col antialiased selection:bg-[#d4af37]/30 selection:text-[#f5f2ed]"
+            style={{ 
+              backgroundImage: tags.some((t) => t.isTransformed)
+                ? "radial-gradient(circle at 50% 50%, #502a35 0%, #1f0f14 100%)"
+                : "radial-gradient(circle at 50% 50%, #1f3a3a 0%, #142121 100%)"
+            }}
+          >
+            <main className="w-screen h-screen flex flex-col overflow-hidden bg-transparent">
               <TagStage
                 tags={tags}
                 onToggleTag={handleToggleTag}
@@ -181,19 +154,44 @@ export default function App() {
                 onTransformTags={handleTransformTags}
                 onResetTags={handleResetTags}
                 onSweepTag={handleSweepTag}
-              />
-            </div>
+                onShowHelp={() => setShowHelp(true)}
+                onEnterKunlun={() => {
+                setIsInkSpattering(true);
+                setTimeout(() => {
+                  setStage("kunlun");
+                }, 1000);
+                setTimeout(() => {
+                  setIsInkSpattering(false);
+                }, 2200);
+              }}
+            />
           </main>
 
           {/* Floating help instruction guidebook overlay modal */}
           <HelpManual isOpen={showHelp} onClose={() => setShowHelp(false)} />
-
-          {/* Universal aesthetic copyright footer */}
-          <footer className="py-3 text-center text-[10px] text-stone-500 border-t border-[#d4af37]/10 bg-[#0f1b1b]/40 font-mono tracking-widest">
-            &copy; {new Date().getFullYear()} XUANYU-CYAN XUAN PAPER DIGITAL INTERFACE. ARTISTIC FLAIR EDITION. ALL RIGHTS RESERVED.
-          </footer>
+        </motion.div>
+      ) : (
+        <motion.div
+          key="kunlun"
+          initial={{ opacity: 0, scale: 1.02, filter: "blur(10px)" }}
+          animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+          exit={{ opacity: 0, scale: 0.98, filter: "blur(10px)" }}
+          transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full min-h-screen"
+        >
+          <KunlunStage onBack={() => {
+            setIsInkSpattering(true);
+            setTimeout(() => {
+              setStage("tagstage");
+            }, 800);
+            setTimeout(() => {
+              setIsInkSpattering(false);
+            }, 1800);
+          }} />
         </motion.div>
       )}
     </AnimatePresence>
+    <InkSplashOverlay isActive={isInkSpattering} />
+  </>
   );
 }

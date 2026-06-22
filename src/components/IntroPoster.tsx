@@ -42,6 +42,9 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const stepCountRef = useRef<number>(0);
+  const delayNodeRef = useRef<DelayNode | null>(null);
+  const feedbackNodeRef = useRef<GainNode | null>(null);
+  const filterNodeRef = useRef<BiquadFilterNode | null>(null);
 
   // Exact reproduction of the high-speed mechanical click + typewriter clacking from the video
   const playMechanicalClick = (ctx: AudioContext, now: number, intensity = 1.0) => {
@@ -155,7 +158,7 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
     }
   };
 
-  // High-paced Industrial Glitch Techno sequencer track (fully reproducing the BGM in the video)
+  // Beautiful, spacious, rhythmic bubbly BGM with stereo echo/delay from the uploaded video
   const playSequencerStep = (step: number) => {
     try {
       if (!audioCtxRef.current) {
@@ -163,44 +166,171 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
       }
       const ctx = audioCtxRef.current;
       if (ctx.state === "suspended") {
-        return; // Auto-paused by user agent security models
+        return; // Auto-paused by browser autostart policies
       }
       
       const now = ctx.currentTime;
-      
-      // Rhythmic high-speed typewriter clacking
-      const scaleIntensity = step % 4 === 0 ? 1.0 : (step % 2 === 0 ? 0.7 : 0.55);
-      playMechanicalClick(ctx, now, scaleIntensity);
-      
-      // Pitch-bent electronic error glitch sweeps
-      if (step % 8 === 2) {
-        playDigitalGlitchBleep(ctx, now, 2300 + (step % 3) * 550);
+
+      // 1. Initialize the Master Delay and Master Filter once for amazing echo tails
+      if (!delayNodeRef.current) {
+        const delay = ctx.createDelay(1.0);
+        delay.delayTime.setValueAtTime(0.32, now); // Beautiful lo-fi delay time
+        
+        const fb = ctx.createGain();
+        fb.gain.setValueAtTime(0.40, now); // ~40% feedback depth
+        
+        delay.connect(fb);
+        fb.connect(delay);
+        delay.connect(ctx.destination);
+        
+        delayNodeRef.current = delay;
+        feedbackNodeRef.current = fb;
       }
-      if (step % 16 === 7) {
-        playDigitalGlitchBleep(ctx, now, 3900 - (step % 4) * 750);
+
+      if (!filterNodeRef.current) {
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(1400, now);
+        filter.Q.setValueAtTime(1.1, now);
+        filter.connect(ctx.destination);
+        if (delayNodeRef.current) {
+          filter.connect(delayNodeRef.current);
+        }
+        filterNodeRef.current = filter;
+      }
+
+      // 2. Beautiful bubbling pentatonic arpeggio sequence exact to the video's cozy, light feel
+      // Melodic sequences over 4 chords for a living, professional production
+      const melodicPatterns = [
+        [659.25, 830.61, 880.00, 987.77, 1109.73, 987.77, 880.00, 830.61], // Pattern A (E Major Pentatonic)
+        [587.33, 739.99, 880.00, 987.77, 1174.66, 987.77, 880.00, 739.99], // Pattern B (D Major / B Minor Pentatonic)
+        [659.25, 880.00, 987.77, 1109.73, 1318.51, 1109.73, 987.77, 880.00], // Pattern C (A Major Pentatonic)
+      ];
+
+      const patternIndex = Math.floor(step / 16) % melodicPatterns.length;
+      const stepInBar = step % 8;
+      const freq = melodicPatterns[patternIndex][stepInBar];
+
+      // Custom Synth Pluck with exponential envelope
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      
+      osc.type = "triangle"; // Gives that warm round marimba-like woodblock bubble tone
+      osc.frequency.setValueAtTime(freq, now);
+      
+      oscGain.gain.setValueAtTime(0, now);
+      oscGain.gain.linearRampToValueAtTime(0.12, now + 0.005);
+      oscGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      
+      osc.connect(oscGain);
+      if (filterNodeRef.current) {
+        oscGain.connect(filterNodeRef.current);
+      } else {
+        oscGain.connect(ctx.destination);
       }
       
-      // Static bursts
-      if (step % 6 === 1 || step % 16 === 13) {
-        playRadioStatic(ctx, now);
-      }
-      
-      // Deep sub impulse beat (BGM bass feel)
-      if (step % 8 === 0) {
+      osc.start(now);
+      osc.stop(now + 0.20);
+
+      // 3. Dynamic ambient lo-fi bass heart pulse on step % 4
+      if (step % 4 === 0) {
         const subOsc = ctx.createOscillator();
         const subGain = ctx.createGain();
+        
         subOsc.type = "sine";
-        subOsc.frequency.setValueAtTime(55, now);
-        subGain.gain.setValueAtTime(0.22, now);
-        subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+        subOsc.frequency.setValueAtTime(65, now);
+        subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.12);
+        
+        subGain.gain.setValueAtTime(0.24, now);
+        subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+        
         subOsc.connect(subGain);
         subGain.connect(ctx.destination);
+        
         subOsc.start(now);
-        subOsc.stop(now + 0.09);
+        subOsc.stop(now + 0.16);
+      }
+
+      // 4. Ultra-subtle shaker on odd beats for driving movement
+      if (step % 2 === 1) {
+        const bufferSize = Math.floor(ctx.sampleRate * 0.015);
+        if (bufferSize > 0) {
+          const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+          }
+          
+          const noise = ctx.createBufferSource();
+          noise.buffer = buffer;
+          
+          const highpass = ctx.createBiquadFilter();
+          highpass.type = "highpass";
+          highpass.frequency.setValueAtTime(7500, now);
+          
+          const noiseGain = ctx.createGain();
+          noiseGain.gain.setValueAtTime(0.015, now);
+          noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.012);
+          
+          noise.connect(highpass);
+          highpass.connect(noiseGain);
+          noiseGain.connect(ctx.destination);
+          
+          noise.start(now);
+          noise.stop(now + 0.02);
+        }
+      }
+
+      // 5. Delicate typewriter keystroke click on each step to replicate the mechanical paper feel
+      const clickOsc = ctx.createOscillator();
+      const clickGain = ctx.createGain();
+      clickOsc.type = "sine";
+      clickOsc.frequency.setValueAtTime(3200, now);
+      clickOsc.frequency.exponentialRampToValueAtTime(600, now + 0.008);
+      
+      clickGain.gain.setValueAtTime(step % 4 === 0 ? 0.04 : 0.02, now);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.01);
+      
+      clickOsc.connect(clickGain);
+      clickGain.connect(ctx.destination);
+      clickOsc.start(now);
+      clickOsc.stop(now + 0.012);
+
+      // 6. Beautiful crystalline wind chimes sound on each step, echoing the pure light theme
+      const chimeFrequencies = [1800, 2100, 2400, 2750, 3100, 3500];
+      const chimeFreq = chimeFrequencies[step % chimeFrequencies.length] + (Math.random() * 30 - 15);
+      
+      const chimeOsc = ctx.createOscillator();
+      const chimeGain = ctx.createGain();
+      const chimeFilter = ctx.createBiquadFilter();
+      
+      chimeOsc.type = "sine";
+      chimeOsc.frequency.setValueAtTime(chimeFreq, now);
+      
+      chimeFilter.type = "bandpass";
+      chimeFilter.frequency.setValueAtTime(chimeFreq, now);
+      chimeFilter.Q.setValueAtTime(12.0, now);
+      
+      // Delicate volume for high clear chime
+      chimeGain.gain.setValueAtTime(0, now);
+      chimeGain.gain.linearRampToValueAtTime(0.05, now + 0.004);
+      chimeGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
+      
+      chimeOsc.connect(chimeFilter);
+      chimeFilter.connect(chimeGain);
+      
+      // Route through master delay for spatial crystalline echo reflections
+      if (delayNodeRef.current) {
+        chimeGain.connect(delayNodeRef.current);
+      } else {
+        chimeGain.connect(ctx.destination);
       }
       
-    } catch {
-      // Handle silently
+      chimeOsc.start(now);
+      chimeOsc.stop(now + 0.7);
+
+    } catch (e) {
+      console.warn("Sequencer step audio error:", e);
     }
   };
 
@@ -242,16 +372,18 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
     }
   };
 
-  // High-paced flickering interval loop - looping continuously forever
+  // High-fidelity rhythmic loop playing cute, bubbly, modern lo-fi music continuously
   useEffect(() => {
-    const intervalTime = 111; // ~135 BPM steady tempo 16th notes
+    const intervalTime = 145; // Sweet sixteenth note duration (~103 BPM cozy electronic groove)
     
     intervalRef.current = setInterval(() => {
       stepCountRef.current += 1;
-      const nextIndex = stepCountRef.current % CHARACTER_LIST.length;
-      setActiveIndex(nextIndex);
+      const step = stepCountRef.current;
       
-      playSequencerStep(stepCountRef.current);
+      // Update character on every step to restore the fast, high-paced rhythmic morphing
+      setActiveIndex((prev) => (prev + 1) % CHARACTER_LIST.length);
+      
+      playSequencerStep(step);
     }, intervalTime);
 
     return () => {
@@ -282,22 +414,111 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
     <div 
       onClick={handleInteractionWakeAudio}
       onTouchStart={handleInteractionWakeAudio}
-      className="relative w-full h-screen bg-[#f5f0e3] text-[#1c1c1c] flex flex-col justify-between overflow-hidden p-6 select-none font-serif md:max-h-screen cursor-pointer"
+      className="relative w-full h-screen bg-[#fdf2f4] text-[#1c1c1c] flex flex-col justify-between overflow-hidden p-6 select-none font-serif md:max-h-screen cursor-pointer transition-colors duration-500"
       style={{
         backgroundImage: `
-          radial-gradient(circle at 50% 50%, rgba(254, 252, 247, 0.98) 0%, rgba(245, 240, 227, 1) 100%),
-          url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.035'/%3E%3C/svg%3E")
+          radial-gradient(circle at 15% 20%, rgba(251, 186, 198, 0.45) 0%, transparent 55%),
+          radial-gradient(circle at 85% 15%, rgba(244, 63, 94, 0.12) 0%, transparent 60%),
+          radial-gradient(circle at 50% 65%, rgba(255, 255, 255, 0.98) 0%, rgba(254, 238, 240, 0.99) 100%),
+          url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.96 0 0 0 0 0.88 0 0 0 0 0.9 0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")
         `
       }}
     >
+      {/* 1. Botanical plant leaf patterns from the first image - rendered in soft pink vector shapes */}
+      <div className="absolute inset-0 pointer-events-none select-none opacity-[0.16] z-0">
+        <svg className="w-full h-full" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+          {/* Top Left Leaf Group */}
+          <path d="M -50,-50 C 150,150 250,450 120,600 C 50,450 -20,250 -50,-50 Z" fill="#fda4af" opacity="0.4" />
+          <path d="M -50,-50 Q 100,270 120,600" stroke="#db2777" strokeWidth="1.2" strokeDasharray="3 3" />
+          <path d="M 0,100 Q 80,180 30,280" stroke="#db2777" strokeWidth="0.8" />
+          <path d="M 30,220 Q 120,300 70,420" stroke="#db2777" strokeWidth="0.8" />
+          <path d="M 60,340 Q 150,420 100,540" stroke="#db2777" strokeWidth="0.8" />
+
+          {/* Overlapping Leaf 2 */}
+          <path d="M 80,-80 C 350,20 420,300 280,480 C 180,320 100,160 80,-80 Z" fill="#ffe4e6" opacity="0.35" />
+          <path d="M 80,-80 Q 240,200 280,480" stroke="#db2777" strokeWidth="1" strokeDasharray="3 3" />
+
+          {/* Bottom Right Leaf Group */}
+          <path d="M 1050,1050 C 750,950 680,650 820,500 C 890,650 960,850 1050,1050 Z" fill="#fda4af" opacity="0.4" />
+          <path d="M 1050,1050 Q 810,800 820,500" stroke="#db2777" strokeWidth="1.2" strokeDasharray="3 3" />
+          <path d="M 950,900 Q 850,800 900,700" stroke="#db2777" strokeWidth="0.8" />
+          <path d="M 910,800 Q 800,700 860,580" stroke="#db2777" strokeWidth="0.8" />
+
+          {/* Bottom Left Leaf Group */}
+          <path d="M -50,1050 C 180,920 220,650 100,500 C 20,650 -20,850 -50,1050 Z" fill="#ffe4e6" opacity="0.3" />
+          <path d="M -50,1050 Q 90,800 100,500" stroke="#db2777" strokeWidth="1" strokeDasharray="3 3" />
+        </svg>
+      </div>
+
+      {/* 2. Golden boundary guidelines and rules from the drawing */}
+      <div className="absolute inset-x-0 top-[26%] h-[1.5px] bg-[#dca87d]/40 pointer-events-none select-none z-0" />
+      <div className="absolute inset-x-0 bottom-[26%] h-[1.5px] bg-[#dca87d]/40 pointer-events-none select-none z-0" />
+
+      {/* 3. Three Translucent Glossy Spheres with specular highlights matching the drawing */}
+      <div className="absolute left-[7%] top-[38%] w-[100px] h-[100px] sm:w-[130px] sm:h-[130px] rounded-full bg-gradient-to-tr from-[#db2777]/80 via-[#fca5a5]/70 to-[#fff5f6]/90 opacity-95 backdrop-blur-[1.5px] shadow-[inset_-12px_-12px_24px_rgba(0,0,0,0.18),0_15px_35px_rgba(219,39,119,0.3)] border border-white/40 pointer-events-none select-none z-10 animate-pulse duration-[7s]">
+        <div className="absolute top-[15%] left-[15%] w-[18%] h-[18%] rounded-full bg-white/85 blur-[0.5px]" />
+      </div>
+      <div className="absolute right-[24%] top-[25%] w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-[#db2777]/65 via-[#fca5a5]/60 to-[#fff5f6]/80 opacity-90 backdrop-blur-[1.2px] shadow-[inset_-4px_-4px_10px_rgba(0,0,0,0.12),0_8px_18px_rgba(219,39,119,0.2)] border border-white/20 pointer-events-none select-none z-10">
+        <div className="absolute top-[15%] left-[15%] w-[18%] h-[18%] rounded-full bg-white/75 blur-[0.5px]" />
+      </div>
+      <div className="absolute right-[33%] bottom-[20%] w-12 h-12 rounded-full bg-gradient-to-tr from-[#db2777]/70 via-[#fca5a5]/65 to-[#fff5f6]/80 opacity-90 backdrop-blur-[1.2px] shadow-[inset_-5px_-5px_12px_rgba(0,0,0,0.14),0_10px_22px_rgba(219,39,119,0.22)] border border-white/20 pointer-events-none select-none z-10">
+        <div className="absolute top-[15%] left-[15%] w-[18%] h-[18%] rounded-full bg-white/75 blur-[0.5px]" />
+      </div>
+
+      {/* 4. Layered White Silk Smoke Swirls (SVG Paths) dynamically integrated into background */}
+      <div className="absolute inset-0 pointer-events-none select-none opacity-45 mix-blend-screen z-0">
+        <svg className="w-full h-full" viewBox="0 0 800 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Main vertical loop of white smoke matching the uploaded vector style */}
+          <path d="M 400 60 Q 520 220, 410 380 T 360 680 Q 420 840, 400 1010" stroke="white" strokeWidth="5.5" strokeLinecap="round" strokeDasharray="1 1" opacity="0.9"/>
+          <path d="M 385 40 Q 550 200, 430 420 T 320 660 Q 450 860, 420 1020" stroke="white" strokeWidth="2" opacity="0.65"/>
+          <path d="M 415 90 Q 320 290, 440 490 T 350 740 Q 410 880, 385 1000" stroke="#fbc5cb" strokeWidth="3.5" opacity="0.55"/>
+          {/* Concentric sweeping organic curves mimicking ribbons */}
+          <path d="M 460,320 C 500,400 320,430 360,540 C 410,650 490,580 450,730" stroke="white" strokeWidth="1.8" opacity="0.75" />
+          <path d="M 340,160 C 480,240 580,360 420,500 C 260,640 380,800 480,880" stroke="white" strokeWidth="1.2" opacity="0.5" />
+          {/* Small background calligraphy notes */}
+          <text x="350" y="70" fill="#db2777" fontSize="8" fontFamily="serif" opacity="0.3" letterSpacing="2">Baowen Mai 3D Artist</text>
+          <text x="590" y="650" fill="#db2777" fontSize="6" fontFamily="serif" transform="rotate(90, 590, 650)" opacity="0.45" letterSpacing="1">SANGANZISHI © 2026</text>
+        </svg>
+      </div>
+
       {/* Decorative Traditional Border Framing Lines */}
-      <div className="absolute inset-5 border border-[#1c1c1c] pointer-events-none z-30 select-none" />
+      <div className="absolute inset-5 border border-[#1c1c1c]/90 pointer-events-none z-30 select-none" />
       <div className="absolute inset-6 border-[3px] border-[#1c1c1c]/15 pointer-events-none z-30 select-none" />
       
+      {/* Background Decorative Calligraphy & Seals overlaying empty spaces */}
+      {/* Left Column 1: Small Seal script / Calligraphy "千秋无界" */}
+      <div className="absolute top-[32%] left-[8%] pointer-events-none opacity-[0.22] select-none text-[50px] sm:text-[80px] font-calligraphy text-[#db2777] tracking-wider" style={{ writingMode: "vertical-rl", textShadow: "1.5px 1.5px 3px rgba(219,39,119,0.22)" }}>
+        千秋无界
+      </div>
+      
+      {/* Left Column 2: Inspiring theme "温柔纯粹，坚韧不拔" */}
+      <div className="absolute top-[15%] left-[17%] pointer-events-none opacity-[0.45] select-none text-xs sm:text-sm font-serif text-[#db2777] leading-relaxed font-black max-w-xs block tracking-[0.25em]" style={{ writingMode: "vertical-rl", textShadow: "1.5px 1.5px 3px rgba(219,39,119,0.25)" }}>
+        温柔纯粹，坚韧不拔
+      </div>
+      
+      {/* Left Column 3: "以独立之心盛放，凭内在之力发光" */}
+      <div className="absolute top-[18%] left-[23%] pointer-events-none opacity-[0.35] select-none text-xs sm:text-xs font-serif text-stone-700 leading-relaxed font-bold max-w-xs block hidden md:block tracking-[0.2em]" style={{ writingMode: "vertical-rl", textShadow: "1px 1px 2px rgba(28,28,28,0.12)" }}>
+        以独立之心盛放，凭内在之力发光
+      </div>
+
+      {/* Right Column 1: Bold statement "无畏，盛放" with distinctive calligraphy design */}
+      <div className="absolute top-[28%] right-[8%] pointer-events-none opacity-[0.25] select-none text-[45px] sm:text-[70px] font-calligraphy text-[#db2777] tracking-widest font-bold" style={{ writingMode: "vertical-rl", textShadow: "2px 2px 4px rgba(219,39,119,0.25)" }}>
+        无畏，盛放
+      </div>
+
+      {/* Right Column 2: Poetic motto "心藏恒久温柔，身拥无限力量" */}
+      <div className="absolute top-[18%] right-[16%] pointer-events-none opacity-[0.4] select-none text-xs sm:text-xs font-serif text-stone-800 leading-relaxed font-black max-w-xs block hidden lg:block tracking-[0.22em]" style={{ writingMode: "vertical-rl", textShadow: "1.5px 1.5px 3px rgba(28,28,28,0.15)" }}>
+        心藏恒久温柔，身拥无限力量
+      </div>
+
+      <div className="absolute top-[18%] left-[29%] pointer-events-none opacity-[0.22] select-none text-[10px] sm:text-[11px] font-serif text-stone-500 leading-relaxed font-medium max-w-xs block hidden xl:block" style={{ writingMode: "vertical-rl", textShadow: "1px 1px 1px rgba(0,0,0,0.06)" }}>
+        灼灼其华，光耀长空。不羁定义，自得天地。
+      </div>
+
       {/* 1. West border (Left side English framing label): Women have infinite possibilities */}
       <div 
         className="absolute left-[30px] top-1/2 -translate-y-1/2 font-sans text-xs sm:text-sm tracking-[0.5em] font-black uppercase text-[#1c1c1c]/85 z-40 select-none" 
-        style={{ writingMode: "vertical-lr", transform: "translateY(-50%) rotate(180deg)" }}
+        style={{ writingMode: "vertical-lr", transform: "translateY(-50%) rotate(180deg)", textShadow: "1px 1px 2px rgba(28,28,28,0.1)" }}
       >
         Women have infinite possibilities
       </div>
@@ -305,31 +526,36 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
       {/* East Border Decorative details */}
       <div 
         className="absolute right-[30px] top-1/2 -translate-y-1/2 font-sans text-[10px] tracking-[0.4em] font-semibold text-stone-500/70 select-none z-40 hidden md:block" 
-        style={{ writingMode: "vertical-lr" }}
+        style={{ writingMode: "vertical-lr", textShadow: "1px 1px 1px rgba(28,28,28,0.05)" }}
       >
         KUNLUN BALLAD SPECIAL ITERATION • BREAK THE LABELS
       </div>
 
       {/* Top Header Section with customized titles requested */}
       <div className="w-full max-w-7xl mx-auto flex flex-col z-20 pt-5 px-6 relative select-none">
-        <div className="flex flex-col md:flex-row md:items-baseline md:justify-between w-full border-b border-stone-800/10 pb-3 gap-3">
-          {/* Main Title: Women’s Infinite Light along with '女性无限光芒' -- Enlarged Slightly */}
-          <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-6">
-            <h1 className="text-[8.5vw] sm:text-[7.5vw] md:text-[4.8vw] lg:text-[4.5vw] font-serif font-black tracking-tighter uppercase leading-none text-[#1c1c1c] select-none">
-              Women’s Infinite Light
-            </h1>
-            <span className="font-serif font-black text-2xl sm:text-3xl md:text-4xl text-[#cb1b1b] tracking-widest leading-none drop-shadow-[0_1px_1px_rgba(0,0,0,0.05)] border-l-2 border-[#cb1b1b]/30 md:pl-5 transition-all uppercase whitespace-nowrap select-none">
-              女性无限光芒
-            </span>
-          </div>
+        <div className="flex flex-row items-baseline justify-between w-full border-b border-[#db2777]/20 pb-4 gap-4">
+          {/* Main Title: English title in top-left made significantly LARGER with custom elegant text shadow */}
+          <h1 
+            className="text-[8.5vw] sm:text-[7.5vw] md:text-[6.5vw] lg:text-[5.5vw] xl:text-[4.8vw] font-serif font-black tracking-tighter uppercase leading-none text-[#1c1c1c] select-none"
+            style={{ textShadow: "3px 3px 6px rgba(28,28,28,0.18), -1px -1px 0px rgba(255,255,255,0.85)" }}
+          >
+            Women’s Infinite Light
+          </h1>
+          {/* Right Subtitle with custom glowing pink-red drop text shadow */}
+          <span 
+            className="font-serif font-black text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl text-[#db2777] tracking-widest leading-none border-l-2 border-[#db2777]/30 pl-3 md:pl-4 transition-all uppercase whitespace-nowrap select-none"
+            style={{ textShadow: "2px 2px 5px rgba(219,39,119,0.32), -1px -1px 0px rgba(255,255,255,0.7)" }}
+          >
+            女子千秋，风华无界
+          </span>
         </div>
 
         {/* '女'字 的旁边是 prompt badge */}
         <div className="mt-4 text-left relative z-20 flex items-center gap-3 select-none">
-          <span className="font-sans font-black text-3xl sm:text-4xl text-[#1c1c1c] tracking-wider bg-[#1c1c1c]/5 px-2.5 py-0.5 rounded">
+          <span className="font-sans font-black text-3xl sm:text-4xl text-[#1c1c1c] tracking-wider bg-[#1c1c1c]/5 px-2.5 py-0.5 rounded" style={{ textShadow: "1px 1px 1px rgba(255,255,255,0.9)" }}>
             “女”字
           </span>
-          <span className="font-sans font-bold text-sm sm:text-base text-stone-600 tracking-[0.25em]">
+          <span className="font-sans font-bold text-sm sm:text-base text-stone-600 tracking-[0.25em]" style={{ textShadow: "1px 1px 1px rgba(255,255,255,0.9)" }}>
             的旁边是..
           </span>
         </div>
@@ -338,46 +564,149 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
       {/* Center Poster Matrix containing the huge Chinese Characters */}
       <div className="w-full flex-1 flex flex-col items-center justify-center relative z-20 my-auto py-4 select-none">
         
-        {/* Crisp Display Character Frame Wrapper with luxury double lines */}
-        <div className="relative p-6 sm:p-10 bg-[#fdfaf2] border-[4px] border-[#1c1c1c] shadow-[12px_12px_0px_rgba(28,28,28,0.1)] flex flex-col items-center justify-center w-[320px] h-[320px] sm:w-[380px] sm:h-[380px] md:w-[460px] md:h-[460px] select-none">
+        {/* Crisp Display Character Frame Wrapper with classical burgundy border & aesthetic organic rose-gold glow */}
+        <div 
+          className="relative p-6 sm:p-10 bg-[#fffbfc] border-[3px] border-[#4a1c24] shadow-[0_20px_50px_-12px_rgba(219,39,119,0.18),_0_12px_24px_-10px_rgba(234,179,8,0.15),_inset_0_0_24px_rgba(251,113,133,0.04)] flex flex-col items-center justify-center w-[340px] h-[340px] sm:w-[410px] sm:h-[410px] md:w-[500px] md:h-[500px] select-none rounded-[4px]"
+          style={{
+            backgroundImage: `
+              radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.99) 0%, rgba(254, 245, 247, 1) 100%),
+              url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='paperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paperNoise)' opacity='0.045'/%3E%3C/svg%3E")
+            `
+          }}
+        >
+          {/* Inner Golden Filament Border representing precious craft lacquer */}
+          <div className="absolute inset-[6px] border border-[#eab308]/30 pointer-events-none select-none" />
           
-          {/* Authentic red draft cross lines inside the matrix */}
-          <div className="absolute inset-4 border border-[#cb1b1b]/10 pointer-events-none select-none" />
-          <div className="absolute inset-y-4 left-1/2 w-[1px] border-l border-dashed border-[#cb1b1b]/15 pointer-events-none select-none" />
-          <div className="absolute inset-x-4 top-1/2 h-[1px] border-t border-dashed border-[#cb1b1b]/15 pointer-events-none select-none" />
+          {/* Inner Pink Filament Border nested tighter for chromatic harmony */}
+          <div className="absolute inset-[10px] border border-dashed border-[#db2777]/12 pointer-events-none select-none" />
+
+          {/* Traditional East Asian Double Corner Brackets in exquisite cinnabar paste tone */}
+          <div className="absolute top-[14px] left-[14px] w-5 h-5 border-t border-l border-[#8b1c1c]/90 pointer-events-none select-none" />
+          <div className="absolute top-[14px] right-[14px] w-5 h-5 border-t border-r border-[#8b1c1c]/90 pointer-events-none select-none" />
+          <div className="absolute bottom-[14px] left-[14px] w-5 h-5 border-b border-l border-[#8b1c1c]/90 pointer-events-none select-none" />
+          <div className="absolute bottom-[14px] right-[14px] w-5 h-5 border-b border-r border-[#8b1c1c]/90 pointer-events-none select-none" />
+
+          {/* Golden Gilded Spot Seals on the Outer Corners */}
+          <div className="absolute top-[13px] left-[13px] w-1.5 h-1.5 bg-[#eab308] rounded-full shadow-[0_0_4px_rgba(234,179,8,0.8)] pointer-events-none select-none" />
+          <div className="absolute top-[13px] right-[13px] w-1.5 h-1.5 bg-[#eab308] rounded-full shadow-[0_0_4px_rgba(234,179,8,0.8)] pointer-events-none select-none" />
+          <div className="absolute bottom-[13px] left-[13px] w-1.5 h-1.5 bg-[#eab308] rounded-full shadow-[0_0_4px_rgba(234,179,8,0.8)] pointer-events-none select-none" />
+          <div className="absolute bottom-[13px] right-[13px] w-1.5 h-1.5 bg-[#eab308] rounded-full shadow-[0_0_4px_rgba(234,179,8,0.8)] pointer-events-none select-none" />
+
+          {/* Authentic rose draft cross lines inside the matrix */}
+          <div className="absolute inset-4 border border-[#db2777]/10 pointer-events-none select-none" />
+          <div className="absolute inset-y-4 left-1/2 w-[1px] border-l border-dashed border-[#db2777]/15 pointer-events-none select-none" />
+          <div className="absolute inset-x-4 top-1/2 h-[1px] border-t border-dashed border-[#db2777]/15 pointer-events-none select-none" />
 
           {/* Golden Corner Floral Ornaments */}
-          <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-[#cb1b1b]/30 select-none" />
-          <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-[#cb1b1b]/30 select-none" />
-          <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-[#cb1b1b]/30 select-none" />
-          <div className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-[#cb1b1b]/30 select-none" />
+          <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-[#eab308]/50 select-none" />
+          <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-[#eab308]/50 select-none" />
+          <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-[#eab308]/50 select-none" />
+          <div className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-[#eab308]/50 select-none" />
 
-          {/* EXQUISITE CHINESE TEXT LAYER */}
-          <div className="relative z-10 flex items-center justify-center font-serif font-black tracking-none leading-none select-none text-[140px] sm:text-[165px] md:text-[210px] scale-y-110">
-            {/* Stable Left Static "女" Character */}
-            <span 
-              className="text-[#cb1b1b] text-right inline-block font-black transition-all select-none"
-              style={{ width: "1.05em" }}
-            >
-              女
-            </span>
+          {/* Elegant Circular Lattice Watermark representing union and traditional harmony */}
+          <div className="absolute inset-8 rounded-full border border-[#db2777]/8 flex items-center justify-center pointer-events-none select-none">
+            <div className="absolute inset-4 rounded-full border border-dashed border-[#eab308]/15" />
+            <div className="absolute inset-[2.5rem] rounded-full border border-[#db2777]/4 flex items-center justify-center">
+              {/* Complex celestial rose-gilt alignment vector line-art */}
+              <svg className="w-2/3 h-2/3 text-[#db2777]/10 opacity-60" viewBox="0 0 120 120" fill="none" stroke="currentColor" strokeWidth="0.6">
+                <circle cx="60" cy="60" r="45" strokeDasharray="3,3" />
+                <circle cx="60" cy="60" r="30" />
+                <circle cx="60" cy="60" r="15" strokeDasharray="2,2" />
+                <path d="M60 5 L60 115" strokeDasharray="4,4" />
+                <path d="M5 60 L115 60" strokeDasharray="4,4" />
+                <path d="M20 20 L100 100" strokeWidth="0.3" strokeDasharray="2,2" />
+                <path d="M20 100 L100 20" strokeWidth="0.3" strokeDasharray="2,2" />
+                <path d="M30,60 Q60,30 90,60 Q60,90 30,60" strokeWidth="0.4" />
+                <path d="M60,30 Q90,60 60,90 Q30,60 60,30" strokeWidth="0.4" />
+              </svg>
+            </div>
+          </div>
+
+
+          {/* EXQUISITE CHINESE CALLIGRAPHY (行楷体) LAYER - Fully solid dense velvet soft-pink gradients with multi-layered backings to completely fill dry-brush hollows with lighter tones, shifted slightly left for beautiful balance */}
+          <div className="relative z-10 flex items-center justify-center font-calligraphy select-none text-[210px] sm:text-[255px] md:text-[310px] tracking-none leading-none scale-y-105 scale-x-105 select-none -translate-x-[12px] sm:-translate-x-[18px] md:-translate-x-[24px]">
+            {/* Left Character "女" with beautiful solid layered backing */}
+            <div className="relative inline-block select-none" style={{ width: "0.68em" }}>
+              {/* Soft pink blur backing */}
+              <span 
+                className="absolute inset-0 text-right font-calligraphy text-[#f472b6]/40 select-none pointer-events-none blur-[4px] scale-[0.97]"
+                style={{ width: "100%" }}
+              >
+                女
+              </span>
+              {/* Thick stroke background underlay to block paper showing through, with soft downward deep pink shadow */}
+              <span 
+                className="absolute inset-0 text-right font-calligraphy text-[#f472b6] select-none pointer-events-none blur-[0.5px] scale-[0.99]"
+                style={{ 
+                  width: "100%", 
+                  WebkitTextStroke: "4px #f472b6",
+                  textShadow: "0 22px 30px rgba(159, 18, 57, 0.7), 0 10px 14px rgba(219, 39, 119, 0.4)"
+                }}
+              >
+                女
+              </span>
+              {/* Foremost glorious pink-to-velvet peony gradient text copy, low-contrast, highly aesthetic */}
+              <span 
+                className="relative z-10 text-right block font-normal text-transparent"
+                style={{ 
+                  width: "100%",
+                  backgroundImage: "linear-gradient(135deg, #fbcfe8 0%, #f472b6 35%, #ec4899 68%, #db2777 100%)",
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  color: "transparent",
+                  WebkitTextStroke: "0.2px rgba(244, 114, 182, 0.6)",
+                  filter: "drop-shadow(0 20px 24px rgba(159, 18, 57, 0.5))",
+                }}
+              >
+                女
+              </span>
+            </div>
             
-            {/* Morphing Right Component with perfectly stable spacing sizing */}
-            <span 
-              className="text-[#cb1b1b] text-left inline-block font-black select-none text-shadow-sm transform scale-100 animate-pulse text-[1.05em]"
-              style={{ width: "1.05em" }}
-            >
-              {activeData.right}
-            </span>
+            {/* Morphing Right Component in calligraphy brush-stroke style with identical underlay */}
+            <div className="relative inline-block select-none transform transition-all duration-100 scale-100 hover:scale-[1.03] active:scale-95" style={{ width: "0.68em" }}>
+              {/* Soft pink blur backing */}
+              <span 
+                className="absolute inset-0 text-left font-calligraphy text-[#f472b6]/40 select-none pointer-events-none blur-[4px] scale-[0.97]"
+                style={{ width: "100%" }}
+              >
+                {activeData.right}
+              </span>
+              {/* Thick stroke background underlay to block paper showing through, with soft downward deep pink shadow */}
+              <span 
+                className="absolute inset-0 text-left font-calligraphy text-[#f472b6] select-none pointer-events-none blur-[0.5px] scale-[0.99]"
+                style={{ 
+                  width: "100%", 
+                  WebkitTextStroke: "4px #f472b6",
+                  textShadow: "0 22px 30px rgba(159, 18, 57, 0.7), 0 10px 14px rgba(219, 39, 119, 0.4)"
+                }}
+              >
+                {activeData.right}
+              </span>
+              {/* Foremost glorious pink-to-velvet peony gradient text copy, low-contrast, highly aesthetic */}
+              <span 
+                className="relative z-10 text-left block font-normal text-transparent"
+                style={{ 
+                  width: "100%",
+                  backgroundImage: "linear-gradient(135deg, #fbcfe8 0%, #f472b6 35%, #ec4899 68%, #db2777 100%)",
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  color: "transparent",
+                  WebkitTextStroke: "0.2px rgba(244, 114, 182, 0.6)",
+                  filter: "drop-shadow(0 20px 24px rgba(159, 18, 57, 0.5))",
+                }}
+              >
+                {activeData.right}
+              </span>
+            </div>
           </div>
 
           {/* Live Seal Signature on the poster representing the complete combined word */}
           <div className="absolute top-4 right-4 flex flex-col items-center select-none">
-            <div className="border border-[#cb1b1b]/45 bg-[#cb1b1b]/5 text-[#cb1b1b] rounded text-[9px] py-0.5 px-1.5 font-bold uppercase tracking-widest leading-none select-none">
+            <div className="border border-[#db2777]/45 bg-[#db2777]/5 text-[#db2777] rounded text-[9px] py-0.5 px-1.5 font-bold uppercase tracking-widest leading-none select-none">
               重塑之迹
             </div>
-            {/* Ink stamps of the composed word */}
-            <div className="mt-1.5 w-11 h-11 border-2 border-dashed border-[#cb1b1b] flex items-center justify-center bg-[#cb1b1b] text-white font-black text-2xl rounded shadow-md shadow-red-900/20 select-none">
+            {/* Ink stamps of the composed word in matching deep pink */}
+            <div className="mt-1.5 w-11 h-11 border-2 border-dashed border-[#db2777] flex items-center justify-center bg-[#db2777] text-white font-black text-2xl rounded shadow-md shadow-pink-900/25 select-none">
               {activeData.char}
             </div>
           </div>
@@ -388,14 +717,14 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
             <span className="font-serif text-[10px] sm:text-xs font-bold tracking-[0.25em] text-neutral-500 block py-1" style={{ writingMode: "vertical-rl" }}>
               每一个
             </span>
-            <span className="font-serif text-xs sm:text-sm font-black tracking-[0.25em] text-[#cb1b1b] block" style={{ writingMode: "vertical-rl" }}>
+            <span className="font-serif text-xs sm:text-sm font-black tracking-[0.25em] text-[#db2777] block" style={{ writingMode: "vertical-rl" }}>
               都是我
             </span>
           </div>
 
           {/* Subtitle B: "不被定义 的我" */}
           <div className="absolute right-6 bottom-1/4 flex flex-col items-center gap-1 select-none pointer-events-none opacity-80 z-20 duration-150">
-            <span className="font-serif text-xs sm:text-sm font-black tracking-[0.25em] text-[#cb1b1b] block" style={{ writingMode: "vertical-rl" }}>
+            <span className="font-serif text-xs sm:text-sm font-black tracking-[0.25em] text-[#db2777] block" style={{ writingMode: "vertical-rl" }}>
               不被定义
             </span>
             <span className="font-serif text-[10px] sm:text-xs font-bold tracking-[0.25em] text-neutral-500 block py-1" style={{ writingMode: "vertical-rl" }}>
@@ -411,7 +740,7 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
 
         {/* Dynamic description lines explaining current state */}
         <div className="text-center mt-6 min-h-[46px] transition-all select-none">
-          <span className="font-sans text-[11px] tracking-[0.3em] text-[#cb1b1b]/70 font-bold block uppercase mb-1">
+          <span className="font-sans text-[11px] tracking-[0.3em] text-[#db2777]/80 font-bold block uppercase mb-1">
             重塑成字 : 【{activeData.char}】
           </span>
           <span className="text-xs sm:text-sm font-serif font-black text-stone-600 tracking-wider">
@@ -426,7 +755,7 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
         <div className="w-full flex items-center justify-center animate-fade-in duration-300">
           <button
             onClick={handleBegin}
-            className="group relative px-10 py-4 rounded-xl bg-[#cc1b1b] hover:bg-[#1c1c1c] text-[#fdfaf2] hover:text-white font-sans font-black tracking-[0.2em] text-xs sm:text-sm shadow-[0_6px_25px_rgba(204,27,27,0.35)] hover:shadow-2xl transition-all duration-300 flex items-center justify-center gap-3 scale-100 hover:scale-[1.03] active:scale-95 cursor-pointer outline-none border border-[#fdfaf2]/10"
+            className="group relative px-10 py-4 rounded-xl bg-[#db2777] hover:bg-[#1c1c1c] text-[#fdfaf2] hover:text-white font-sans font-black tracking-[0.2em] text-xs sm:text-sm shadow-[0_6px_25px_rgba(219,39,119,0.35)] hover:shadow-2xl transition-all duration-300 flex items-center justify-center gap-3 scale-100 hover:scale-[1.03] active:scale-95 cursor-pointer outline-none border border-[#fdfaf2]/10"
           >
             <Sparkles className="h-4.5 w-4.5 text-amber-200 animate-pulse" />
             <span>开启破执及重塑之旅</span>
@@ -435,14 +764,14 @@ export default function IntroPoster({ onEnter }: IntroPosterProps) {
         </div>
       </div>
 
-      {/* Bottom Footer Section with specialized user labels</h1> */}
+      {/* Bottom Footer Section with specialized user labels */}
       <div className="w-full max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center border-t border-[#1c1c1c]/25 pt-4 text-[9.5px] font-sans text-stone-600 font-bold tracking-widest uppercase select-none gap-2 text-center sm:text-left z-20 pb-2 px-6">
         <div>
           THE PROTAGONIST OF THE WORLD SHINING NOT ONLY TODAY
         </div>
         
         {/* Customized Bottom-Right component requested */}
-        <div className="text-[#cb1b1b] font-serif font-black text-[12px] sm:text-[13.5px] tracking-[0.1em] lowercase whitespace-nowrap bg-red-100/40 px-3 py-1 border border-red-200/50 rounded transition-all select-none">
+        <div className="text-[#db2777] font-serif font-black text-[12px] sm:text-[13.5px] tracking-[0.1em] lowercase whitespace-nowrap bg-pink-100/40 px-3 py-1 border border-pink-200/50 rounded transition-all select-none">
           拒绝单一评判，每一种女性都值得喝彩
         </div>
       </div>

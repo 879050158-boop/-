@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { motion } from "motion/react";
 import { TagItem } from "../types";
 import { 
   playWindChime, 
@@ -11,9 +12,10 @@ import {
   playButtonClick,
   playThreadTighten,
   ensureAudioStarted,
-  setAmbienceIntensity
+  setAmbienceIntensity,
+  playGuqinOvertone
 } from "../utils";
-import { Wind, RotateCcw, Volume2, Sparkles, HelpCircle } from "lucide-react";
+import { Wind, RotateCcw, Volume2, Sparkles, HelpCircle, BookOpen, Feather } from "lucide-react";
 
 interface TagStageProps {
   tags: TagItem[];
@@ -23,6 +25,8 @@ interface TagStageProps {
   onTransformTags?: () => void;
   onResetTags?: () => void;
   onSweepTag?: (id: string) => void;
+  onShowHelp?: () => void;
+  onEnterKunlun?: () => void;
 }
 
 const LOCAL_TAG_MAPPING: Record<string, string> = {
@@ -64,6 +68,8 @@ export default function TagStage({
   onTransformTags,
   onResetTags,
   onSweepTag,
+  onShowHelp,
+  onEnterKunlun,
 }: TagStageProps) {
   // Motion states: 'idle' (hanging vertically under the flower), 'scattered' (dispersed naturally)
   const [layoutState, setLayoutState] = useState<"idle" | "scattered">("idle");
@@ -71,6 +77,327 @@ export default function TagStage({
   const [hoveredTag, setHoveredTag] = useState<string | null>(null);
   const [shatteringIds, setShatteringIds] = useState<string[]>([]);
   const stageRef = useRef<HTMLDivElement>(null);
+
+  interface InkParticle {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    maxSize: number;
+    alpha: number;
+    color: string;
+    type: 'ink' | 'pollen' | 'mist';
+    targetX?: number;
+    targetY?: number;
+    speedMultiplier?: number;
+    angle?: number;
+    spinSpeed?: number;
+    age?: number;
+    maxAge?: number;
+  }
+
+  interface WaterRipple {
+    id: string;
+    x: number;
+    y: number;
+  }
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const particlesRef = useRef<InkParticle[]>([]);
+  const animFrameId = useRef<number | null>(null);
+  const [ripples, setRipples] = useState<WaterRipple[]>([]);
+  const mouseRef = useRef<{ x: number; y: number }>({ x: -1000, y: -1000 });
+
+  const addRipple = (x: number, y: number) => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setRipples((prev) => [...prev, { id, x, y }]);
+    setTimeout(() => {
+      setRipples((prev) => prev.filter((r) => r.id !== id));
+    }, 2000);
+  };
+
+  // Particle updating animation frame loop with rich Chinese ink wash halo & water bleed physics (晕染、散落、中式水墨重聚效果)
+  const updateParticles = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const particles = particlesRef.current;
+
+    if (particles.length === 0) {
+      if (animFrameId.current) {
+        cancelAnimationFrame(animFrameId.current);
+        animFrameId.current = null;
+      }
+      return;
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+
+      if (p.targetX !== undefined && p.targetY !== undefined) {
+        // GATHERING MODE: Pull towards target with spiral inertia mimicking magnetic calligraphy ink
+        const dx = p.targetX - p.x;
+        const dy = p.targetY - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 6) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        const force = Math.min(3.5, 380 / (dist + 30)) * (p.speedMultiplier || 1.0);
+        const angle = Math.atan2(dy, dx) + (dist > 70 ? Math.sin(p.angle || 0) * 0.2 : 0);
+        
+        p.x += Math.cos(angle) * (force + 3);
+        p.y += Math.sin(angle) * (force + 3);
+        
+        if (p.angle !== undefined && p.spinSpeed !== undefined) {
+          p.angle += p.spinSpeed;
+        }
+
+        // Ink dots converge: they condense (get smaller, sharpen)
+        p.size = Math.max(1.5, p.size - 0.04);
+        p.alpha = Math.max(0.01, p.alpha - 0.006);
+        if (p.alpha <= 0.02) {
+          particles.splice(i, 1);
+          continue;
+        }
+      } else {
+        // SCATTERING MODE: Traditional ink splashing on fiber Xuan paper
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Friction slowing down for other particles
+        p.vx *= 0.95;
+        p.vy *= 0.95;
+
+        if (p.type === 'ink' || p.type === 'mist') {
+          p.size = Math.min(p.maxSize, p.size + 0.12); // wet bleeding halo
+          p.alpha -= 0.011; // absorption fading
+        } else {
+          p.vy += 0.012; // light golden dust pollen falls gently
+          p.alpha -= 0.007;
+        }
+
+        if (p.alpha <= 0.005) {
+          particles.splice(i, 1);
+          continue;
+        }
+      }
+
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+
+      if (p.type === 'ink' || p.type === 'mist') {
+        const isWarm = p.color.includes('219,39,119') || p.color.includes('rose') || p.color.includes('8b0000');
+        const coreColor = isWarm ? 'rgba(219, 39, 119, 1)' : 'rgba(13, 22, 22, 1)';
+        const rColor = isWarm ? 'rgba(219, 39, 119, ' : 'rgba(13, 22, 22, ';
+
+        // Inner dense kernel (焦/浓)
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 0.38, 0, Math.PI * 2);
+        ctx.fillStyle = coreColor;
+        ctx.fill();
+
+        // Beautiful Radial gradient for the wet wash border (晕)
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        const grad = ctx.createRadialGradient(p.x, p.y, p.size * 0.15, p.x, p.y, p.size);
+        grad.addColorStop(0, coreColor);
+        grad.addColorStop(0.25, rColor + '0.55)');
+        grad.addColorStop(0.65, rColor + '0.18)');
+        grad.addColorStop(1, rColor + '0)');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Extra organic fiber splash spikes for high-impact dots
+        if (p.size > 12) {
+          ctx.beginPath();
+          for (let k = 0; k < 6; k++) {
+            const spAngle = (k * Math.PI) / 3;
+            const spDist = p.size * (0.8 + Math.sin(k * 8 + p.x) * 0.2);
+            const sx = p.x + Math.cos(spAngle) * spDist;
+            const sy = p.y + Math.sin(spAngle) * spDist;
+            if (k === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          }
+          ctx.closePath();
+          ctx.fillStyle = rColor + '0.12)';
+          ctx.fill();
+        }
+      } else {
+        // Shimmering Golden Pollen Dust with gorgeous glow offsets
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = "#eab308";
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    if (particles.length > 0) {
+      animFrameId.current = requestAnimationFrame(updateParticles);
+    } else {
+      animFrameId.current = null;
+    }
+  };
+
+  const triggerScatterInk = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Center point is around the blooming peony/lotus flower structure
+    const centerX = w / 2;
+    const centerY = h * 0.36;
+
+    const pArray: InkParticle[] = [];
+    const amt = 85 + Math.floor(Math.random() * 45);
+
+    for (let i = 0; i < amt; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.2 + Math.random() * 11.5;
+      const size = 3 + Math.random() * 10;
+      const maxSize = size * (2.2 + Math.random() * 2.2);
+
+      const r = Math.random();
+      let color = "rgba(13, 22, 22, 0.9)";
+      let type: 'ink' | 'pollen' | 'mist' = 'ink';
+
+      if (r < 0.28) {
+        color = "rgba(219, 39, 119, 0.82)"; // Vermillion/pink ink
+      } else if (r < 0.44) {
+        color = "#eab308"; // Golden pollen shimmer
+        type = 'pollen';
+      } else if (r < 0.55) {
+        color = "rgba(13, 22, 22, 0.38)"; // Wash mist
+        type = 'mist';
+      }
+
+      pArray.push({
+        x: centerX + (Math.random() - 0.5) * 60,
+        y: centerY + (Math.random() - 0.5) * 60,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size,
+        maxSize,
+        alpha: 0.75 + Math.random() * 0.25,
+        color,
+        type
+      });
+    }
+
+    particlesRef.current = [...particlesRef.current, ...pArray];
+    if (!animFrameId.current) {
+      animFrameId.current = requestAnimationFrame(updateParticles);
+    }
+  };
+
+  const triggerGatherInk = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const targetX = w / 2;
+    const targetY = h * 0.36;
+
+    const pArray: InkParticle[] = [];
+    const amt = 90 + Math.floor(Math.random() * 50);
+
+    for (let i = 0; i < amt; i++) {
+      let x = 0;
+      let y = 0;
+      const edge = Math.floor(Math.random() * 4);
+      if (edge === 0) { // Top
+        x = Math.random() * w;
+        y = -25;
+      } else if (edge === 1) { // Bottom
+        x = Math.random() * w;
+        y = h + 25;
+      } else if (edge === 2) { // Left
+        x = -25;
+        y = Math.random() * h;
+      } else { // Right
+        x = w + 25;
+        y = Math.random() * h;
+      }
+
+      const size = 2 + Math.random() * 7;
+      const speedMultiplier = 0.7 + Math.random() * 1.6;
+
+      const r = Math.random();
+      let color = "rgba(13, 22, 22, 0.85)";
+      let type: 'ink' | 'pollen' | 'mist' = 'ink';
+
+      if (r < 0.28) {
+        color = "rgba(219, 39, 119, 0.78)";
+      } else if (r < 0.45) {
+        color = "#eab308";
+        type = 'pollen';
+      }
+
+      pArray.push({
+        x,
+        y,
+        vx: 0,
+        vy: 0,
+        size,
+        maxSize: size,
+        alpha: 0.7 + Math.random() * 0.3,
+        color,
+        type,
+        targetX,
+        targetY,
+        speedMultiplier,
+        angle: Math.random() * Math.PI * 2,
+        spinSpeed: (Math.random() - 0.5) * 0.09
+      });
+    }
+
+    particlesRef.current = [...particlesRef.current, ...pArray];
+    if (!animFrameId.current) {
+      animFrameId.current = requestAnimationFrame(updateParticles);
+    }
+  };
+
+  // Re-size and synchronise canvas scale
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const handleResize = () => {
+      const rect = canvas.parentElement?.getBoundingClientRect();
+      canvas.width = rect?.width || window.innerWidth;
+      canvas.height = rect?.height || window.innerHeight;
+    };
+
+    handleResize();
+    const resizeObserver = new ResizeObserver(() => handleResize());
+    if (canvas.parentElement) {
+      resizeObserver.observe(canvas.parentElement);
+    }
+    
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
+      if (animFrameId.current) {
+        cancelAnimationFrame(animFrameId.current);
+        animFrameId.current = null;
+      }
+    };
+  }, []);
 
   // High-fidelity intro stages matching the video
   // "dormant" -> "landing" (flower drops) -> "blooming" (flower opens) -> "cascading" (tags fall down) -> "ready" (interactive)
@@ -80,6 +407,10 @@ export default function TagStage({
   // Dynamic wind-gale simulation states
   const [gustActive, setGustActive] = useState(false);
   const [gustIntensity, setGustIntensity] = useState(0);
+
+  // High-fidelity interactive Guqin overtone and pointer momentum tracking
+  const lastOvertoneTime = useRef<number>(0);
+  const lastMousePos = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
 
   interface HoverParticle {
     id: string;
@@ -148,17 +479,48 @@ export default function TagStage({
   };
 
   const handleTagMouseMove = (e: React.MouseEvent<HTMLDivElement>, tagId: string, isTransformed: boolean, isSwept: boolean) => {
+    const now = Date.now();
+    const currentX = e.clientX;
+    const currentY = e.clientY;
+    
+    // Calculate distance and velocity
+    const dx = currentX - lastMousePos.current.x;
+    const dy = currentY - lastMousePos.current.y;
+    const dt = Math.max(1, now - lastMousePos.current.time);
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    // Ignore cases where the mouse doesn't move or dt is too huge (e.g. first move in a while)
+    let velocity = dist / dt; 
+    if (lastMousePos.current.time === 0 || dt > 180) {
+      velocity = 0.5; // default fallback for first touch
+    }
+    
+    // Save last mouse info
+    lastMousePos.current = { x: currentX, y: currentY, time: now };
+
     // Only spawn occasional particles on mouse move to keep it super lightweight but beautiful
-    if (Math.random() > 0.5) {
+    if (Math.random() > 0.45) {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       addParticles(x, y, tagId, isTransformed, isSwept, 1);
     }
+
+    // Trigger Guqin overtone with throttling
+    // Throttling interval: e.g. 140ms so that notes form a beautiful coherent melody instead of piling up
+    if (!isMuted && now - lastOvertoneTime.current > 140 && dist > 1.8) {
+      playGuqinOvertone(velocity);
+      lastOvertoneTime.current = now;
+    }
   };
 
-  const handleTagMouseEnter = (tagId: string, isTransformed: boolean, isSwept: boolean) => {
+  const handleTagMouseEnter = (e: React.MouseEvent<HTMLDivElement>, tagId: string, isTransformed: boolean, isSwept: boolean) => {
+    ensureAudioStarted();
     setHoveredTag(tagId);
+    
+    const now = Date.now();
+    lastMousePos.current = { x: e.clientX, y: e.clientY, time: now };
+
     if (isTransformed) {
       if (!isSwept) {
         onSweepTag?.(tagId);
@@ -167,8 +529,18 @@ export default function TagStage({
     } else {
       triggerSound("rustle");
     }
+
+    // Play a gentle Guqin overtone on entry to immediately give acoustic feedback!
+    if (!isMuted && now - lastOvertoneTime.current > 140) {
+      playGuqinOvertone(0.4); // light initial touch velocity
+      lastOvertoneTime.current = now;
+    }
+
     // Spawn a burst of 12 particles upon mouse touch!
-    addParticles(80, 25, tagId, isTransformed, isSwept, 12);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const lx = e.clientX - rect.left;
+    const ly = e.clientY - rect.top;
+    addParticles(lx >= 0 ? lx : 80, ly >= 0 ? ly : 25, tagId, isTransformed, isSwept, 12);
   };
   
   // Audio trigger helper supporting high-fidelity procedural synthesis states
@@ -266,6 +638,7 @@ export default function TagStage({
     triggerSound("scatter"); // State 3 Wind Valley whoosh and rhythmic flutters
     setLayoutState("scattered");
     handleWindGust();
+    triggerScatterInk();
   };
 
   const handleGather = () => {
@@ -274,6 +647,7 @@ export default function TagStage({
     setGustIntensity(0);
     setAmbienceIntensity(0); // reset ambient music sway
     setLayoutState("idle");
+    triggerGatherInk();
   };
 
   // Automated gentle swaying in idle state (mimics micro breeze)
@@ -322,12 +696,20 @@ export default function TagStage({
   return (
     <div 
       id="tag-stage"
-      className="relative flex flex-col h-full overflow-hidden select-none border border-[#d4af37]/20 rounded-2xl bg-[#142121] shadow-2xl"
+      className="relative flex flex-col w-full h-full overflow-hidden select-none bg-transparent"
       style={{
-        backgroundImage: "radial-gradient(circle at 50% 50%, #1f3a3a 0%, #142121 100%)",
+        backgroundImage: tags.some((t) => t.isTransformed)
+          ? "radial-gradient(circle at 50% 50%, #46340a 0%, #171101 100%)"
+          : "radial-gradient(circle at 50% 50%, #1f3a3a 0%, #142121 100%)",
       }}
       ref={stageRef}
-      onPointerDown={() => ensureAudioStarted()}
+      onPointerDown={(e) => {
+        ensureAudioStarted();
+        addRipple(e.clientX, e.clientY);
+      }}
+      onPointerMove={(e) => {
+        mouseRef.current = { x: e.clientX, y: e.clientY };
+      }}
       onTouchStart={() => ensureAudioStarted()}
     >
       <style>{`
@@ -466,6 +848,12 @@ export default function TagStage({
           backgroundImage: `url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E')`,
         }}
       />
+
+      {/* Beautiful High-Fidelity Chinese Ink Particle Canvas Layer */}
+      <canvas 
+        ref={canvasRef} 
+        className="absolute inset-0 pointer-events-none z-30 w-full h-full" 
+      />
       
       {/* Background ink washes and ancient calligraphy script floating around */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-around overflow-hidden">
@@ -501,6 +889,20 @@ export default function TagStage({
 
         {/* Floating Action Button Bar */}
         <div className="flex items-center gap-2 mt-2 sm:mt-0 text-xs text-[#e0d8cc]">
+          {onShowHelp && (
+            <button
+              onClick={() => {
+                triggerSound("click");
+                onShowHelp();
+              }}
+              className="px-2.5 py-1.5 rounded-lg border border-[#d4af37]/25 bg-[#1a2b2b]/90 text-stone-300 hover:text-[#f5f2ed] hover:border-[#d4af37]/50 hover:bg-[#1f3a3a] transition-all flex items-center gap-1.5 cursor-pointer"
+              title="设计意向说明与开发指南"
+            >
+              <BookOpen className="h-3.5 w-3.5 text-[#d4af37]" />
+              <span className="hidden md:inline">意向说明</span>
+            </button>
+          )}
+
           <button
             onClick={() => {
               const nextMuted = !isMuted;
@@ -1015,7 +1417,7 @@ export default function TagStage({
                       ? "left 0.1s linear, top 0.1s linear, opacity 0.5s ease"
                       : "left 1.2s cubic-bezier(0.16, 1, 0.3, 1), top 1.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s ease-out, transform 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.2)",
                   }}
-                  onMouseEnter={() => handleTagMouseEnter(tag.id, !!tag.isTransformed, !!tag.swept)}
+                  onMouseEnter={(e) => handleTagMouseEnter(e, tag.id, !!tag.isTransformed, !!tag.swept)}
                   onMouseMove={(e) => handleTagMouseMove(e, tag.id, !!tag.isTransformed, !!tag.swept)}
                   onMouseLeave={() => setHoveredTag(null)}
                   onClick={() => {
@@ -1121,28 +1523,106 @@ export default function TagStage({
                         </div>
 
                         {/* Left Fragment Paper Piece (looks like the old gray tag split jaggedly with high detail) */}
-                        <div
-                          className="absolute inset-0 flex items-center justify-center bg-[#f5f2ed] border border-[#cbbca3] text-[#2c2c2c] border-l-[4px] border-l-[#8b0000]/60 font-serif select-none px-5 py-2.5 text-[15px] rounded-sm animate-clip-left"
+                        <motion.div
+                          className="absolute inset-0 flex items-center justify-center bg-[#f5f2ed] border border-[#cbbca3] text-[#2c2c2c] border-l-[4px] border-l-[#8b0000]/60 font-serif select-none px-5 py-2.5 text-[15px] rounded-sm"
                           style={{
                             clipPath: "polygon(0% 0%, 51% 0%, 47% 12%, 53% 25%, 46% 38%, 52% 52%, 45% 68%, 54% 82%, 48% 91%, 51% 100%, 0% 100%)",
                             zIndex: 10,
-                            animationDelay: tearDelay,
+                          }}
+                          initial={{ x: 0, y: 0, rotate: 0, rotateY: 0, scale: 1, opacity: 1, filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.3))" }}
+                          animate={{
+                            x: [
+                              0, 
+                              -20 - (Math.abs(Math.sin(index * 7.72 + 3.14)) * 25), 
+                              -75 - (Math.abs(Math.sin(index * 7.72 + 3.14)) * 45) + Math.cos(swayTime * 2.1 + index) * 15, 
+                              -190 - (Math.abs(Math.sin(index * 7.72 + 3.14)) * 110)
+                            ],
+                            y: [
+                              0, 
+                              45 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 35), 
+                              150 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 110), 
+                              420 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 160)
+                            ],
+                            rotate: [
+                              0, 
+                              -15 - (Math.abs(Math.sin(index * 7.72 + 3.14)) * 20), 
+                              -65 - (Math.abs(Math.sin(index * 7.72 + 3.14)) * 55), 
+                              -210 - (Math.abs(Math.sin(index * 7.72 + 3.14)) * 120)
+                            ],
+                            rotateY: [
+                              0, 
+                              35 * (Math.abs(Math.sin(index * 7.72 + 3.14)) > 0.5 ? 1 : -1), 
+                              160 * (Math.abs(Math.sin(index * 7.72 + 3.14)) > 0.5 ? 1 : -1), 
+                              320 * (Math.abs(Math.sin(index * 7.72 + 3.14)) > 0.5 ? 1 : -1)
+                            ],
+                            scale: [1, 0.98, 0.84, 0.35],
+                            opacity: [1, 1, 0.85, 0],
+                            filter: [
+                              "drop-shadow(0 4px 6px rgba(0,0,0,0.3))",
+                              "drop-shadow(0 8px 12px rgba(0,0,0,0.22))",
+                              "drop-shadow(0 15px 20px rgba(0,0,0,0.14))",
+                              "drop-shadow(0 22px 28px rgba(0,0,0,0))"
+                            ]
+                          }}
+                          transition={{
+                            duration: 1.8,
+                            ease: [0.15, 0.85, 0.33, 1],
+                            delay: (index % 6) * 0.1,
                           }}
                         >
                           {tag.originalText || tag.text}
-                        </div>
+                        </motion.div>
 
                         {/* Right Fragment Paper Piece (matching jagged split edge) */}
-                        <div
-                          className="absolute inset-0 flex items-center justify-center bg-[#f5f2ed] border border-[#cbbca3] text-[#2c2c2c] font-serif select-none px-5 py-2.5 text-[15px] rounded-sm animate-clip-right"
+                        <motion.div
+                          className="absolute inset-0 flex items-center justify-center bg-[#f5f2ed] border border-[#cbbca3] text-[#2c2c2c] font-serif select-none px-5 py-2.5 text-[15px] rounded-sm"
                           style={{
                             clipPath: "polygon(51% 0%, 100% 0%, 100% 100%, 51% 100%, 48% 91%, 54% 82%, 45% 68%, 52% 52%, 46% 38%, 53% 25%, 47% 12%)",
                             zIndex: 10,
-                            animationDelay: tearDelay,
+                          }}
+                          initial={{ x: 0, y: 0, rotate: 0, rotateY: 0, scale: 1, opacity: 1, filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.3))" }}
+                          animate={{
+                            x: [
+                              0, 
+                              20 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 25), 
+                              75 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 45) + Math.sin(swayTime * 2.1 + index) * 15, 
+                              190 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 110)
+                            ],
+                            y: [
+                              0, 
+                              45 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 35), 
+                              150 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 110), 
+                              420 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 160)
+                            ],
+                            rotate: [
+                              0, 
+                              15 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 20), 
+                              65 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 55), 
+                              210 + (Math.abs(Math.sin(index * 7.72 + 3.14)) * 120)
+                            ],
+                            rotateY: [
+                              0, 
+                              -35 * (Math.abs(Math.sin(index * 7.72 + 3.14)) > 0.5 ? 1 : -1), 
+                              -160 * (Math.abs(Math.sin(index * 7.72 + 3.14)) > 0.5 ? 1 : -1), 
+                              -320 * (Math.abs(Math.sin(index * 7.72 + 3.14)) > 0.5 ? 1 : -1)
+                            ],
+                            scale: [1, 0.98, 0.84, 0.35],
+                            opacity: [1, 1, 0.85, 0],
+                            filter: [
+                              "drop-shadow(0 4px 6px rgba(0,0,0,0.3))",
+                              "drop-shadow(0 8px 12px rgba(0,0,0,0.22))",
+                              "drop-shadow(0 15px 20px rgba(0,0,0,0.14))",
+                              "drop-shadow(0 22px 28px rgba(0,0,0,0))"
+                            ]
+                          }}
+                          transition={{
+                            duration: 1.8,
+                            ease: [0.15, 0.85, 0.33, 1],
+                            delay: (index % 6) * 0.1,
                           }}
                         >
                           {tag.originalText || tag.text}
-                        </div>
+                        </motion.div>
 
                         {/* Jagged central glowing tear-line */}
                         <div 
@@ -1263,6 +1743,32 @@ export default function TagStage({
         </div>
       </div>
 
+      {/* Exquisite Translucent Floating Feather Button to Enter Kunlun */}
+      {onEnterKunlun && (
+        <div className="absolute bottom-18 right-6 z-30">
+          <button
+            onClick={() => {
+              ensureAudioStarted();
+              if (onEnterKunlun) onEnterKunlun();
+            }}
+            className="group relative flex items-center justify-center w-14 h-14 rounded-full border border-emerald-500/35 bg-emerald-950/50 text-emerald-400 hover:text-emerald-300 hover:border-emerald-400 shadow-[0_4px_20px_rgba(16,185,129,0.25)] hover:shadow-[0_4px_28px_rgba(16,185,129,0.5)] backdrop-blur-md transition-all duration-300 cursor-pointer"
+            title="听·昆仑山谣 (Listen to Kunlun Mountain Ballads)"
+          >
+            {/* Spinning/pulsing aura underlays */}
+            <span className="absolute inset-0 rounded-full bg-emerald-500/10 animate-ping opacity-60 pointer-events-none" />
+            <span className="absolute -inset-1 rounded-full border border-dashed border-emerald-400/20 group-hover:border-emerald-400/50 animate-spin-slow pointer-events-none" />
+            
+            {/* Translucent hollow羽毛 shape representing the blank outline */}
+            <Feather className="w-6 h-6 text-emerald-300 group-hover:text-emerald-200 transition-all duration-350 scale-100 group-hover:scale-110 active:scale-95" />
+            
+            {/* Poetic Tiny Hover Flag */}
+            <span className="absolute right-16 scale-0 origin-right group-hover:scale-100 transition-transform duration-200 px-3 py-1 bg-emerald-950/90 text-[10.5px] font-serif text-[#e6fcf4] font-black rounded border border-emerald-500/20 shadow-lg whitespace-nowrap">
+              听 · 昆仑山谣
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* 5. Minimal Bottom Statistics & Display Bar */}
       <div className="z-10 px-6 py-3 bg-[#0a0f10]/80 border-t border-[#d4af37]/15 text-[11px] text-stone-300 flex items-center justify-between font-mono">
         <div className="flex items-center gap-4">
@@ -1274,6 +1780,44 @@ export default function TagStage({
           <Sparkles className="h-3 w-3 text-[#d4af37]" />
           <span>ARTISTIC FLAIR CORE 1.2</span>
         </div>
+      </div>
+
+      {/* Dynamic water ripples triggered on clicking the background */}
+      <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
+        {ripples.map((rip) => (
+          <div
+            key={rip.id}
+            className="absolute pointer-events-none"
+            style={{ left: rip.x, top: rip.y }}
+          >
+            {/* Outer expanding ring */}
+            <motion.div
+              initial={{ scale: 0, opacity: 0.85 }}
+              animate={{ scale: [0, 4.5, 9.5], opacity: [0.85, 0.4, 0] }}
+              transition={{ duration: 1.8, ease: "easeOut" }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                width: "40px",
+                height: "40px",
+                border: "2px solid rgba(191, 219, 254, 0.75)",
+                boxShadow: "0 0 16px rgba(59, 130, 246, 0.4), inset 0 0 12px rgba(147, 197, 253, 0.2)",
+              }}
+            />
+            {/* Middle delay ring */}
+            <motion.div
+              initial={{ scale: 0, opacity: 0.65 }}
+              animate={{ scale: [0, 3.5, 7.0], opacity: [0.65, 0.3, 0] }}
+              transition={{ duration: 1.5, delay: 0.15, ease: "easeOut" }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                width: "40px",
+                height: "40px",
+                border: "1.5px solid rgba(191, 219, 254, 0.55)",
+                boxShadow: "0 0 12px rgba(59, 130, 246, 0.25)",
+              }}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );

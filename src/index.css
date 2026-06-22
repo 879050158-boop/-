@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Zhi+Mang+Xing&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Cinzel:wght@400;700&display=swap');
 @import "tailwindcss";
 
 /* 1. Global Custom Theme Settings for Antiquity and Zen Elegance (Artistic Flair Theme) */
@@ -5,6 +6,7 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Microsoft YaHei", "PingFang SC";
   --font-serif: "Playfair Display", "Georgia", "Noto Serif SC", "STSong", "Songti SC", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-calligraphy: "Zhi Mang Xing", "Ma Shan Zheng", "Kaiti", "STKaiti", "DFKai-SB", "KaiTi_GB2312", cursive;
   
   /* Artistic Flair Custom Palette */
   --color-art-teal-dark: #142121;
