@@ -159,7 +159,7 @@ interface MouseRipple {
   y: number;
 }
 
-export default function KunlunStage({ onBack }: { onBack: () => void }) {
+export default function KunlunStage({ onBack, onEnterFinale }: { onBack: () => void; onEnterFinale: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const [muted, setMuted] = useState(false);
   const [activeSentences, setActiveSentences] = useState<ActiveSentence[]>([]);
@@ -623,7 +623,7 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
       }}
       className="relative w-screen h-screen flex flex-col items-center justify-center overflow-hidden select-none cursor-pointer"
       style={{
-        backgroundImage: `radial-gradient(circle at 50% 45%, rgba(56, 128, 224, 0.52) 0%, rgba(28, 88, 178, 0.60) 55%, rgba(16, 48, 108, 0.65) 100%), url(${kunlunBg})`,
+        backgroundImage: `radial-gradient(circle at 50% 45%, rgba(14, 165, 233, 0.48) 0%, rgba(8, 145, 178, 0.58) 55%, rgba(13, 59, 87, 0.72) 100%), url(${kunlunBg})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat"
@@ -703,7 +703,7 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
       <div 
         className="absolute inset-0 pointer-events-none z-0 transition-transform duration-700 ease-out"
         style={{
-          background: `radial-gradient(circle at ${50 + mouseOffset.x * 12}% ${45 + mouseOffset.y * 12}%, rgba(186, 230, 253, 0.35) 0%, rgba(56, 189, 248, 0.10) 45%, rgba(0, 0, 0, 0) 75%)`,
+          background: `radial-gradient(circle at ${50 + mouseOffset.x * 12}% ${45 + mouseOffset.y * 12}%, rgba(204, 251, 241, 0.40) 0%, rgba(45, 212, 191, 0.15) 45%, rgba(0, 0, 0, 0) 75%)`,
           mixBlendMode: "screen",
           transform: `translate(${mouseOffset.x * 15}px, ${mouseOffset.y * 15}px)`,
           opacity: 0.7
@@ -748,7 +748,7 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
               transition={{ duration: 1.8, delay: 0.15, ease: "easeInOut" }}
               className="w-[320px] h-[320px] rounded-full absolute"
               style={{
-                background: "radial-gradient(circle, rgba(14, 116, 144, 0.45) 0%, rgba(8, 47, 73, 0.25) 50%, rgba(0,0,0,0) 70%)",
+                background: "radial-gradient(circle, rgba(13, 148, 136, 0.50) 0%, rgba(15, 23, 42, 0.30) 50%, rgba(0,0,0,0) 70%)",
                 filter: "blur(28px)",
               }}
             />
@@ -870,6 +870,19 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
               {muted ? "山谣静沉 (Muted)" : "仙笛清越 (Sound On)"}
             </span>
           </button>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEnterFinale();
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-serif tracking-widest text-amber-950 bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-500 active:scale-95 transition-all duration-300 rounded-full border border-yellow-300/40 shadow-[0_4px_12px_rgba(234,179,8,0.25)] hover:shadow-[0_6px_20px_rgba(234,179,8,0.45)] cursor-pointer font-extrabold animate-pulse"
+            style={{ animationDuration: "3.5s" }}
+            id="kunlun-finale-btn"
+          >
+            <Sparkles className="h-4 w-4 text-amber-950 animate-spin-slow" />
+            <span>终章：破茧成峰</span>
+          </button>
         </div>
       </div>
 
@@ -889,7 +902,7 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
             transformStyle: "preserve-3d",
             perspective: 1000
           }}
-          className="relative w-[385px] h-[231px] sm:w-[465px] sm:h-[279px] md:w-[570px] md:h-[342px] flex items-center justify-center select-none"
+          className="relative w-[480px] h-[288px] sm:w-[580px] sm:h-[348px] md:w-[700px] md:h-[420px] flex items-center justify-center select-none"
         >
           {/* Shadow */}
           <div
@@ -909,13 +922,13 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
           >
             <div className="absolute inset-0 bg-white rounded-lg shadow-lg border border-slate-100 overflow-hidden" />
 
-            {/* Inner Letter Card INSERT - Exquisite turquoise crystalline water ripple paper design */}
+            {/* Inner Letter Card INSERT - Exquisite pink crystalline water ripple paper design */}
             <motion.div
               initial={{ y: 0 }}
               animate={{ y: isOpen ? "-58%" : "0%" }}
               transition={{ duration: 1.2, ease: [0.19, 1, 0.22, 1] }}
-              className="absolute inset-x-3 sm:inset-x-4 top-2 h-[80%] z-10 rounded-md border border-teal-100/40 shadow-inner flex flex-col items-center justify-center pointer-events-none overflow-hidden"
-              style={{ background: "linear-gradient(180deg, #f0fdfa 0%, #a2eedd 28%, #46dac5 58%, #1ea696 82%, #f3faf9 100%)" }}
+              className="absolute inset-x-3 sm:inset-x-4 top-2 h-[80%] z-10 rounded-md border border-pink-200/40 shadow-inner flex flex-col items-center justify-center pointer-events-none overflow-hidden"
+              style={{ background: "linear-gradient(180deg, #fff9fb 0%, #ffd9e2 28%, #fbcfe8 58%, #fda4af 82%, #fff5f6 100%)" }}
             >
               {/* Subtle water ripple background blend */}
               <div 
@@ -930,32 +943,32 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
               {isOpen ? (
                 <div className="flex flex-col items-center w-full px-4 select-none relative z-10">
                   {/* Circle Mask silhouette container - water ripple palette */}
-                  <div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full border-2 border-[#a2eedd]/80 bg-gradient-to-b from-[#f0fdfa] via-[#46dac5] to-[#1ea696] overflow-hidden shadow-inner relative flex items-center justify-center">
-                    {/* Beautiful, detail-rich celestial landscape illustration aligned with turquoise-teal theme */}
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full border-2 border-[#ffd1dc]/80 bg-gradient-to-b from-[#fff5f5] via-[#fbcfe8] to-[#fda4af] overflow-hidden shadow-inner relative flex items-center justify-center">
+                    {/* Beautiful, detail-rich celestial landscape illustration aligned with pink theme */}
                     <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <defs>
                         <linearGradient id="circleSky" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#f0fdfa" />
-                          <stop offset="45%" stopColor="#a2eedd" />
-                          <stop offset="100%" stopColor="#46dac5" />
+                          <stop offset="0%" stopColor="#fff5f5" />
+                          <stop offset="45%" stopColor="#ffd1dc" />
+                          <stop offset="100%" stopColor="#fbcfe8" />
                         </linearGradient>
                         <radialGradient id="skySun" cx="0.5" cy="0.5" r="0.5">
                           <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
-                          <stop offset="40%" stopColor="#fdfaf0" stopOpacity="0.95" />
-                          <stop offset="70%" stopColor="#e2faf6" stopOpacity="0.5" />
-                          <stop offset="100%" stopColor="#a2eedd" stopOpacity="0" />
+                          <stop offset="40%" stopColor="#fffcfc" stopOpacity="0.95" />
+                          <stop offset="70%" stopColor="#ffd1dc" stopOpacity="0.5" />
+                          <stop offset="100%" stopColor="#ffe4e6" stopOpacity="0" />
                         </radialGradient>
                         <linearGradient id="peakTeal" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#4fd1c5" />
-                          <stop offset="100%" stopColor="#134e4a" />
+                          <stop offset="0%" stopColor="#fda4af" />
+                          <stop offset="100%" stopColor="#9f1239" />
                         </linearGradient>
                         <linearGradient id="peakBlue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#319795" />
-                          <stop offset="100%" stopColor="#111827" />
+                          <stop offset="0%" stopColor="#fbcfe8" />
+                          <stop offset="100%" stopColor="#881337" />
                         </linearGradient>
                         <linearGradient id="peakOchre" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#a2eedd" />
-                          <stop offset="100%" stopColor="#0f766e" />
+                          <stop offset="0%" stopColor="#ffe4e6" />
+                          <stop offset="100%" stopColor="#fda4af" />
                         </linearGradient>
                       </defs>
 
@@ -981,12 +994,12 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
                       {/* Crane silhouettes soaring */}
                       <g transform="translate(32, 28) scale(0.68)">
                         <path d="M 0,0 C -4,-6 -9,-2 -11,-1 C -8,2 -3,2 -1,1 C -3,3 -4,8 -1,10 C 1,8 2,3 1,1 C 4,2 8,2 10,-1 C 8,-2 3,-6 -1,0 Z" fill="#ffffff" />
-                        <circle cx="-1" cy="0" r="0.4" fill="#319795" />
+                        <circle cx="-1" cy="0" r="0.4" fill="#fda4af" />
                       </g>
 
                       <g transform="translate(68, 22) scale(0.48)">
                         <path d="M 0,0 C -4,-6 -9,-2 -11,-1 C -8,2 -3,2 -1,1 C -3,3 -4,8 -1,10 C 1,8 2,3 1,1 C 4,2 8,2 10,-1 C 8,-2 3,-6 -1,0 Z" fill="#ffffff" />
-                        <circle cx="-1" cy="0" r="0.4" fill="#319795" />
+                        <circle cx="-1" cy="0" r="0.4" fill="#fda4af" />
                       </g>
 
                       {/* Front Side Cliff and Pine (Soft Morandi Rose Silt / Ochre Clay) */}
@@ -1004,22 +1017,22 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
                     </svg>
 
                     <div className="absolute inset-0 bg-transparent overflow-hidden">
-                      <Sparkles className="absolute top-2 left-4 h-3 w-3 text-teal-200 animate-spin-slow" />
+                      <Sparkles className="absolute top-2 left-4 h-3 w-3 text-pink-200 animate-spin-slow" />
                       <Sparkles className="absolute top-6 right-3 h-2 w-2 text-[#ffffff] animate-bounce" />
                     </div>
                   </div>
 
-                  <div className="mt-2.5 text-[11px] sm:text-[13px] font-serif tracking-[0.08em] text-[#0f5351] font-black uppercase text-center drop-shadow-sm">
+                  <div className="mt-2.5 text-[11px] sm:text-[13px] font-serif tracking-[0.08em] text-[#be185d] font-black uppercase text-center drop-shadow-sm">
                     KUNLUN YAO·了不起的她们
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center text-center p-3 relative z-10 text-teal-950 font-serif">
-                  <Music className="h-6 w-6 text-[#1ea696] animate-pulse mb-1.5" />
-                  <span className="text-xs font-extrabold text-teal-900 tracking-widest leading-relaxed">
+                <div className="flex flex-col items-center justify-center text-center p-3 relative z-10 text-rose-950 font-serif">
+                  <Music className="h-6 w-6 text-[#fda4af] animate-pulse mb-1.5" />
+                  <span className="text-xs font-extrabold text-rose-900 tracking-widest leading-relaxed">
                     展开昆仑信纸，聆听心中深邃风骨
                   </span>
-                  <span className="text-[9px] text-[#0f5351] font-mono tracking-wider mt-1.5 uppercase font-bold">
+                  <span className="text-[9px] text-[#be185d] font-mono tracking-wider mt-1.5 uppercase font-bold">
                     Click to Open Letter
                   </span>
                 </div>
@@ -1240,7 +1253,7 @@ export default function KunlunStage({ onBack }: { onBack: () => void }) {
           <Sparkles className="h-4.5 w-4.5 text-yellow-600 animate-spin-slow" />
           <span>
             {isOpen 
-              ? "随意点击空中，山谣吟哦，女子自当高耸入林"
+              ? "随意点击空中，山谣吟哦。点击右上角『终章：破茧成峰』凝聚万壑女性力量"
               : "点击信封上的古印封缄，解封并聆听山河长调"}
           </span>
         </div>

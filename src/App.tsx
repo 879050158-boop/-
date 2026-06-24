@@ -4,7 +4,11 @@ import TagStage from "./components/TagStage";
 import HelpManual from "./components/HelpManual";
 import IntroPoster from "./components/IntroPoster";
 import KunlunStage from "./components/KunlunStage";
+import FinaleAnimation from "./components/FinaleAnimation";
 import InkSplashOverlay from "./components/InkSplashOverlay";
+import IntroTransitionOverlay from "./components/IntroTransitionOverlay";
+import AzuriteTransitionOverlay from "./components/AzuriteTransitionOverlay";
+import RoseFinaleTransitionOverlay from "./components/RoseFinaleTransitionOverlay";
 import { BookOpen, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -47,8 +51,11 @@ const INITIAL_TAGS: string[] = [
 ];
 
 export default function App() {
-  const [stage, setStage] = useState<"intro" | "tagstage" | "kunlun">("intro");
+  const [stage, setStage] = useState<"intro" | "tagstage" | "kunlun" | "finale">("intro");
   const [isInkSpattering, setIsInkSpattering] = useState(false);
+  const [isIntroTransitioning, setIsIntroTransitioning] = useState(false);
+  const [isAzuriteTransitioning, setIsAzuriteTransitioning] = useState(false);
+  const [isRoseTransitioning, setIsRoseTransitioning] = useState(false);
 
   // Convert list to stateful Tag objects
   const [tags, setTags] = useState<TagItem[]>(
@@ -66,8 +73,120 @@ export default function App() {
 
   const [showHelp, setShowHelp] = useState(false);
 
+  // Traditional Chinese Instrument Audio Synthesis Engine (Web Audio API)
+  const audioCtxRef = React.useRef<AudioContext | null>(null);
+  const pentatonicScale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00];
+  const lastNoteIdxRef = React.useRef(0);
+
+  const initAudio = () => {
+    if (!audioCtxRef.current) {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        audioCtxRef.current = new AudioContextClass();
+      }
+    }
+    if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  };
+
+  // Guzheng Pluck (古筝弹拨音效)
+  const playGuzhengPluck = (freq: number, velocity: number = 0.5) => {
+    const ctx = initAudio();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const oscTri = ctx.createOscillator();
+    const oscSine = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    const bandpass = ctx.createBiquadFilter();
+
+    // Subtle pitch bend of Guzheng sliding
+    const bend = 1.01 + Math.random() * 0.01;
+    oscTri.type = "triangle";
+    oscTri.frequency.setValueAtTime(freq * bend, now);
+    oscTri.frequency.exponentialRampToValueAtTime(freq, now + 0.08);
+
+    oscSine.type = "sine";
+    oscSine.frequency.setValueAtTime(freq * bend, now);
+    oscSine.frequency.exponentialRampToValueAtTime(freq, now + 0.05);
+
+    bandpass.type = "bandpass";
+    bandpass.frequency.setValueAtTime(freq * 2.0, now);
+    bandpass.frequency.exponentialRampToValueAtTime(freq * 1.2, now + 0.8);
+    bandpass.Q.setValueAtTime(2.5, now);
+
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(velocity * 0.15, now + 0.006);
+    gainNode.gain.exponentialRampToValueAtTime(velocity * 0.04, now + 0.2);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+
+    oscTri.connect(bandpass);
+    oscSine.connect(gainNode);
+    bandpass.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscTri.start(now);
+    oscSine.start(now);
+    oscTri.stop(now + 2.0);
+    oscSine.stop(now + 2.0);
+  };
+
+  // Xiao Flute (箫管柔和长音效)
+  const playXiaoBlow = (freq: number, duration: number = 1.2) => {
+    const ctx = initAudio();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    const vibrato = ctx.createOscillator();
+    const vibratoGain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, now);
+
+    // Subtle natural vibrato of ancient bamboo flute
+    vibrato.frequency.setValueAtTime(5.8, now);
+    vibratoGain.gain.setValueAtTime(3.2, now);
+
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.08, now + 0.28); // gentle breathing sound attack
+    gainNode.gain.setValueAtTime(0.08, now + duration - 0.2);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    vibrato.connect(vibratoGain);
+    vibratoGain.connect(osc.frequency);
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    vibrato.start(now);
+    osc.start(now);
+    vibrato.stop(now + duration + 0.2);
+    osc.stop(now + duration + 0.2);
+  };
+
+  // Play next scale note on interactive tag click
+  const playNextPentatonicNote = () => {
+    const freq = pentatonicScale[lastNoteIdxRef.current];
+    playGuzhengPluck(freq, 0.45);
+    lastNoteIdxRef.current = (lastNoteIdxRef.current + 1) % pentatonicScale.length;
+  };
+
+  // Beautiful Guzheng arpeggio cascade for transformation celebration
+  const playCelebrationCascade = () => {
+    const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((f, idx) => {
+      setTimeout(() => {
+        playGuzhengPluck(f, 0.5);
+      }, idx * 75);
+    });
+  };
+
   // Toggle single tag activation
   const handleToggleTag = (id: string) => {
+    playNextPentatonicNote();
     setTags((prev) =>
       prev.map((t) => (t.id === id ? { ...t, selected: !t.selected } : t))
     );
@@ -75,6 +194,8 @@ export default function App() {
 
   // Bulk select action (used by all select helper buttons)
   const handleBulkSelect = (ids: string[]) => {
+    playGuzhengPluck(392.00, 0.4);
+    setTimeout(() => playGuzhengPluck(523.25, 0.35), 80);
     setTags((prev) =>
       prev.map((t) => (ids.includes(t.id) ? { ...t, selected: true } : t))
     );
@@ -82,11 +203,13 @@ export default function App() {
 
   // Clear choices
   const handleClearSelection = () => {
+    playGuzhengPluck(293.66, 0.35);
     setTags((prev) => prev.map((t) => ({ ...t, selected: false })));
   };
 
   // Transform tags to positive meanings
   const handleTransformTags = () => {
+    playCelebrationCascade();
     setTags((prev) =>
       prev.map((t) => ({
         ...t,
@@ -99,6 +222,7 @@ export default function App() {
 
   // Reset tags back to negative originals for repeating experience
   const handleResetTags = () => {
+    playGuzhengPluck(261.63, 0.4);
     setTags((prev) =>
       prev.map((t) => ({
         ...t,
@@ -128,7 +252,16 @@ export default function App() {
             transition={{ duration: 0.45, ease: "easeInOut" }}
             className="w-full min-h-screen"
           >
-            <IntroPoster onEnter={() => setStage("tagstage")} />
+            <IntroPoster onEnter={() => {
+              setIsIntroTransitioning(true);
+              playXiaoBlow(329.63, 1.8);
+              setTimeout(() => {
+                setStage("tagstage");
+              }, 500);
+              setTimeout(() => {
+                setIsIntroTransitioning(false);
+              }, 1200);
+            }} />
           </motion.div>
         ) : stage === "tagstage" ? (
           <motion.div
@@ -156,42 +289,86 @@ export default function App() {
                 onSweepTag={handleSweepTag}
                 onShowHelp={() => setShowHelp(true)}
                 onEnterKunlun={() => {
-                setIsInkSpattering(true);
+                  setIsAzuriteTransitioning(true);
+                  playGuzhengPluck(392.00, 0.4);
+                  setTimeout(() => playGuzhengPluck(523.25, 0.4), 100);
+                  setTimeout(() => playGuzhengPluck(659.25, 0.35), 200);
+                  setTimeout(() => playXiaoBlow(783.99, 1.2), 300);
+                  setTimeout(() => {
+                    setStage("kunlun");
+                  }, 500);
+                  setTimeout(() => {
+                    setIsAzuriteTransitioning(false);
+                  }, 1100);
+                }}
+              />
+            </main>
+
+            {/* Floating help instruction guidebook overlay modal */}
+            <HelpManual isOpen={showHelp} onClose={() => setShowHelp(false)} />
+          </motion.div>
+        ) : stage === "kunlun" ? (
+          <motion.div
+            key="kunlun"
+            initial={{ opacity: 0, scale: 1.02, filter: "blur(10px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, scale: 0.98, filter: "blur(10px)" }}
+            transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <KunlunStage 
+              onBack={() => {
+                setIsAzuriteTransitioning(true);
+                playGuzhengPluck(523.25, 0.4);
+                setTimeout(() => playGuzhengPluck(392.00, 0.35), 100);
+                setTimeout(() => playXiaoBlow(329.63, 1.0), 200);
                 setTimeout(() => {
-                  setStage("kunlun");
-                }, 1000);
+                  setStage("tagstage");
+                }, 400);
                 setTimeout(() => {
-                  setIsInkSpattering(false);
-                }, 2200);
+                  setIsAzuriteTransitioning(false);
+                }, 950);
+              }} 
+              onEnterFinale={() => {
+                setIsRoseTransitioning(true);
+                playCelebrationCascade();
+                setTimeout(() => {
+                  setStage("finale");
+                }, 500);
+                setTimeout(() => {
+                  setIsRoseTransitioning(false);
+                }, 1100);
               }}
             />
-          </main>
-
-          {/* Floating help instruction guidebook overlay modal */}
-          <HelpManual isOpen={showHelp} onClose={() => setShowHelp(false)} />
-        </motion.div>
-      ) : (
-        <motion.div
-          key="kunlun"
-          initial={{ opacity: 0, scale: 1.02, filter: "blur(10px)" }}
-          animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-          exit={{ opacity: 0, scale: 0.98, filter: "blur(10px)" }}
-          transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full min-h-screen"
-        >
-          <KunlunStage onBack={() => {
-            setIsInkSpattering(true);
-            setTimeout(() => {
-              setStage("tagstage");
-            }, 800);
-            setTimeout(() => {
-              setIsInkSpattering(false);
-            }, 1800);
-          }} />
-        </motion.div>
-      )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="finale"
+            initial={{ opacity: 0, scale: 1.03, filter: "blur(15px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, scale: 0.97, filter: "blur(12px)" }}
+            transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <FinaleAnimation 
+              onBackToKunlun={() => {
+                setIsRoseTransitioning(true);
+                playGuzhengPluck(392.00, 0.45);
+                setTimeout(() => {
+                  setStage("kunlun");
+                }, 450);
+                setTimeout(() => {
+                  setIsRoseTransitioning(false);
+                }, 1000);
+              }}
+            />
+          </motion.div>
+        )}
     </AnimatePresence>
     <InkSplashOverlay isActive={isInkSpattering} />
+    <IntroTransitionOverlay isActive={isIntroTransitioning} />
+    <AzuriteTransitionOverlay isActive={isAzuriteTransitioning} />
+    <RoseFinaleTransitionOverlay isActive={isRoseTransitioning} />
   </>
   );
 }
