@@ -9,6 +9,7 @@ import InkSplashOverlay from "./components/InkSplashOverlay";
 import IntroTransitionOverlay from "./components/IntroTransitionOverlay";
 import AzuriteTransitionOverlay from "./components/AzuriteTransitionOverlay";
 import RoseFinaleTransitionOverlay from "./components/RoseFinaleTransitionOverlay";
+import BgmPlayer from "./components/BgmPlayer";
 import { BookOpen, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -72,6 +73,31 @@ export default function App() {
   );
 
   const [showHelp, setShowHelp] = useState(false);
+
+  // Background Music Ref and Autoplay Bypass Setup
+  const bgmRef = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    const playBgm = () => {
+      if (bgmRef.current) {
+        bgmRef.current.play().then(() => {
+          // Once successfully playing, remove listeners to avoid duplicate calls
+          document.removeEventListener("click", playBgm);
+          document.removeEventListener("touchstart", playBgm);
+        }).catch((e) => {
+          console.log("Autoplay blocked or waiting for user interaction:", e);
+        });
+      }
+    };
+
+    document.addEventListener("click", playBgm);
+    document.addEventListener("touchstart", playBgm);
+
+    return () => {
+      document.removeEventListener("click", playBgm);
+      document.removeEventListener("touchstart", playBgm);
+    };
+  }, []);
 
   // Traditional Chinese Instrument Audio Synthesis Engine (Web Audio API)
   const audioCtxRef = React.useRef<AudioContext | null>(null);
@@ -255,6 +281,9 @@ export default function App() {
             <IntroPoster onEnter={() => {
               setIsIntroTransitioning(true);
               playXiaoBlow(329.63, 1.8);
+              if (bgmRef.current) {
+                bgmRef.current.play().catch(e => console.log("BGM play error on Enter:", e));
+              }
               setTimeout(() => {
                 setStage("tagstage");
               }, 500);
@@ -369,6 +398,8 @@ export default function App() {
     <IntroTransitionOverlay isActive={isIntroTransitioning} />
     <AzuriteTransitionOverlay isActive={isAzuriteTransitioning} />
     <RoseFinaleTransitionOverlay isActive={isRoseTransitioning} />
+    <BgmPlayer bgmRef={bgmRef} />
+    <audio ref={bgmRef} src="/api/bgm" loop preload="auto" />
   </>
   );
 }

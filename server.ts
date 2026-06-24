@@ -115,7 +115,45 @@ ${customText || "无额外描述，请全权自由发挥超现实、张力十足
   }
 });
 
-// 2. Vite Middleware Setup (Dynamic serving based on env)
+// 2. BGM proxy endpoint to stream copyrighted/premium audio with required referer header
+app.get("/api/bgm", async (req, res) => {
+  try {
+    const bgmUrl = "https://mp3.itingwa.com/2022-05/15/20220515115239-MjU4MDI1.mp3";
+    const response = await fetch(bgmUrl, {
+      headers: {
+        "Referer": "https://www.itingwa.com/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+
+    if (!response.ok) {
+      res.status(response.status).send("Failed to stream BGM from upstream source");
+      return;
+    }
+
+    const contentType = response.headers.get("content-type");
+    const contentLength = response.headers.get("content-length");
+
+    if (contentType) res.setHeader("Content-Type", contentType);
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+    res.setHeader("Accept-Ranges", "bytes");
+
+    if (response.body) {
+      const body = response.body as any;
+      for await (const chunk of body) {
+        res.write(chunk);
+      }
+    }
+    res.end();
+  } catch (error: any) {
+    console.error("BGM Proxy Error:", error);
+    if (!res.headersSent) {
+      res.status(500).send("Internal BGM Proxy Error");
+    }
+  }
+});
+
+// 3. Vite Middleware Setup (Dynamic serving based on env)
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
